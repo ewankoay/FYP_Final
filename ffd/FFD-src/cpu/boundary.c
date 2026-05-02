@@ -138,9 +138,11 @@ int set_bnd_vel(PARA_DATA *para, REAL **var, int var_type, REAL *psi,
         // Rack outlet
         if(flagp[IX(i,j,k)]==RACK_OUTLET) {
           psi[IX(i,j,k)] = var[VXBC][IX(i,j,k)];
+          if (i != 0) psi[IX(i - 1, j, k)] = var[VXBC][IX(i, j, k)];
         }
         // Solid wall
         if(flagp[IX(i,j,k)]==1) {
+            /*
 	    if(k == kmax+1){
 		psi[IX(i, j, k)] = 1.0; // moving top wall
 		//if ( i != 0) psi[IX(i - 1, j, k)] = 0;
@@ -154,13 +156,14 @@ int set_bnd_vel(PARA_DATA *para, REAL **var, int var_type, REAL *psi,
 		as[IX(i, j + 1, k)] = 0;
 	    }
 	    else {
+            */
             	psi[IX(i, j, k)] = 0.0;
             	if (i != 0) psi[IX(i - 1, j, k)] = 0;
 	    }
-        }
+        //}
         // Tile
         if(flagp[IX(i, j, k)] == TILE) {
-          if (flagp[IX(i, j, k)] == TILE && para->solv->tile_flow_correct == PRESSURE_BASE) {
+          if (para->solv->tile_flow_correct == PRESSURE_BASE) {
               // West
               if (i == 0) {
                   //psi[IX(i, j, k)] = var[TILE_FLOW_BC][IX(i, j, k)]/ayz;
@@ -252,6 +255,7 @@ int set_bnd_vel(PARA_DATA *para, REAL **var, int var_type, REAL *psi,
         // Rack outlet
         if(flagp[IX(i,j,k)]==RACK_OUTLET) {
           psi[IX(i,j,k)] = var[VYBC][IX(i,j,k)];
+          if (j != 0) psi[IX(i, j - 1, k)] = var[VYBC][IX(i, j, k)];
         }
         // Solid wall
         if(flagp[IX(i,j,k)]==1) {
@@ -260,7 +264,7 @@ int set_bnd_vel(PARA_DATA *para, REAL **var, int var_type, REAL *psi,
         }
         // Tile
         if(flagp[IX(i, j, k)] == TILE) {
-          if (flagp[IX(i, j, k)] == TILE && para->solv->tile_flow_correct == PRESSURE_BASE) {
+          if (para->solv->tile_flow_correct == PRESSURE_BASE) {
               // South
               if (j == 0) {
                   //psi[IX(i, j, k)] = var[TILE_FLOW_BC][IX(i, j, k)] / azx;
@@ -352,13 +356,14 @@ int set_bnd_vel(PARA_DATA *para, REAL **var, int var_type, REAL *psi,
         // Rack outlet
         if(flagp[IX(i,j,k)]==RACK_OUTLET) {
           psi[IX(i,j,k)] = var[VZBC][IX(i,j,k)];
+          if (k != 0) psi[IX(i, j, k - 1)] = var[VZBC][IX(i, j, k)];
         }
         if(flagp[IX(i,j,k)]==SOLID) {
             psi[IX(i, j, k)] = 0;
             if (k != 0) psi[IX(i, j, k - 1)] = 0;
         }
         if(flagp[IX(i, j, k)] == TILE) {
-          if(flagp[IX(i, j, k)] == TILE && para->solv->tile_flow_correct == PRESSURE_BASE) {
+          if(para->solv->tile_flow_correct == PRESSURE_BASE) {
             // Floor
             if (k == 0) {
                 //psi[IX(i, j, k)] = var[TILE_FLOW_BC][IX(i, j, k)] / axy;
@@ -577,6 +582,7 @@ int set_bnd_vel_adv(PARA_DATA *para, REAL **var, int var_type, REAL *psi,
       // Rack outlet
       if(flagp[IX(i,j,k)]==RACK_OUTLET) {
         psi[IX(i,j,k)] = var[VYBC][IX(i,j,k)];
+        if (j != 0) psi[IX(i, j - 1, k)] = var[VYBC][IX(i, j, k)];
       }
       // Solid wall
       if (flagp[IX(i, j, k)] == 1) {
@@ -664,6 +670,7 @@ int set_bnd_vel_adv(PARA_DATA *para, REAL **var, int var_type, REAL *psi,
       // Rack outlet
       if(flagp[IX(i,j,k)]==RACK_OUTLET) {
         psi[IX(i,j,k)] = var[VZBC][IX(i,j,k)];
+        if (k != 0) psi[IX(i, j, k - 1)] = var[VZBC][IX(i, j, k)];
       }
       if (flagp[IX(i, j, k)] == SOLID) {
         psi[IX(i, j, k)] = 0;
@@ -1439,12 +1446,14 @@ REAL adjust_velocity(PARA_DATA *para, REAL **var, int **BINDEX) {
   REAL *flagp = var[FLAGP];
   REAL axy, ayz, azx;
   int put_X = para->geom->tile_putX, put_Y =para->geom->tile_putY, put_Z = para->geom->tile_putZ;
+  int id;
 
   // Go through all the inlets and outlets
   for(it=0; it<index; it++) {
     i = BINDEX[0][it];
     j = BINDEX[1][it];
     k = BINDEX[2][it];
+    id = BINDEX[4][it];
 
     axy = area_xy(para, var, i, j, k);
     ayz = area_yz(para, var, i, j, k);
@@ -1472,6 +1481,14 @@ REAL adjust_velocity(PARA_DATA *para, REAL **var, int **BINDEX) {
       else
         mass_in += w[IX(i,j,k)] * axy;
     }
+    //else if (flagp[IX(i,j,k)]==RACK_OUTLET) {
+    //  if (para->bc->RackDir[id] == 1) mass_in += u[IX(i,j,k)] * ayz;
+    //  else if (para->bc->RackDir[id] == -1) mass_in += (-u[IX(i-1,j,k)]) * ayz;
+    //  else if (para->bc->RackDir[id] == 2) mass_in += v[IX(i,j,k)] * azx;
+    //  else if (para->bc->RackDir[id] == -2) mass_in += (-v[IX(i,j-1,k)]) * azx;
+    //  else if (para->bc->RackDir[id] == 3) mass_in += w[IX(i,j,k)] * axy;
+    //  else if (para->bc->RackDir[id] == -3) mass_in += (-w[IX(i,j,k-1)]) * axy;
+    //}
     /*-------------------------------------------------------------------------
     | Compute the total outflow
     -------------------------------------------------------------------------*/
@@ -1507,6 +1524,14 @@ REAL adjust_velocity(PARA_DATA *para, REAL **var, int **BINDEX) {
         area_out += axy;
       }
     } // End of computing outflow
+    //else if (flagp[IX(i,j,k)]==RACK_INLET) {
+    //  if (para->bc->RackDir[id] == 1) mass_out += u[IX(i-1,j,k)] * ayz;
+    //  else if (para->bc->RackDir[id] == -1) mass_out += (-u[IX(i,j,k)]) * ayz;
+    //  else if (para->bc->RackDir[id] == 2) mass_out += v[IX(i,j-1,k)] * azx;
+    //  else if (para->bc->RackDir[id] == -2) mass_out += (-v[IX(i,j,k)]) * azx;
+    //  else if (para->bc->RackDir[id] == 3) mass_out += w[IX(i,j,k-1)] * axy;
+    //  else if (para->bc->RackDir[id] == -3) mass_out += (-w[IX(i,j,k)]) * axy;
+    //}
   } // End of for loop for going through all the inlets and outlets
 
   /*---------------------------------------------------------------------------

@@ -444,6 +444,11 @@ int assign_parameter(PARA_DATA *para, char *string) {
     sprintf(msg, "assign_parameter(): %s=%f", tmp, para->mytime->t_steady);
     ffd_log(msg, FFD_NORMAL);
   }
+  else if (!strcmp(tmp, "mytime.num_resultfile")) {
+    sscanf(string, "%s%d", tmp, &para->mytime->num_resultfile);
+    sprintf(msg, "assign_parameter(): %s=%d", tmp, para->mytime->num_resultfile);
+    ffd_log(msg, FFD_NORMAL);
+  }
   else if(!strcmp(tmp, "solv.solver")) {
     sscanf(string, "%s%s", tmp, tmp2);
     sprintf(msg, "assign_parameter(): %s=%s", tmp, tmp2);
@@ -458,21 +463,38 @@ int assign_parameter(PARA_DATA *para, char *string) {
     }
     ffd_log(msg, FFD_NORMAL);
   }
-  else if (!strcmp(tmp, "solv.swipe_adv")) {
-      sscanf(string, "%s%d", tmp, &para->solv->swipe_adv);
-      sprintf(msg, "assign_parameter(): %s=%d", tmp, para->solv->swipe_adv);
+  // MODIFIED BY EWAN FOR RESIDUAL SETTINGS FROM FIXED NUMBER OF ITERATIONS
+  else if (!strcmp(tmp, "solv.res_adv")) {
+      if (ifDouble) {
+          sscanf(string, "%s%lf", tmp, &para->solv->res_adv);
+      }
+      else {
+          sscanf(string, "%s%f", tmp, &para->solv->res_adv);
+      }
+      sprintf(msg, "assign_parameter(): %s=%f", tmp, para->solv->res_adv);
       ffd_log(msg, FFD_NORMAL);
   }
-  else if (!strcmp(tmp, "solv.swipe_dif")) {
-      sscanf(string, "%s%d", tmp, &para->solv->swipe_dif);
-      sprintf(msg, "assign_parameter(): %s=%d", tmp, para->solv->swipe_dif);
+  else if (!strcmp(tmp, "solv.res_dif")) {
+      if (ifDouble) {
+          sscanf(string, "%s%lf", tmp, &para->solv->res_dif);
+      }
+      else {
+          sscanf(string, "%s%f", tmp, &para->solv->res_dif);
+      }
+      sprintf(msg, "assign_parameter(): %s=%f", tmp, para->solv->res_dif);
       ffd_log(msg, FFD_NORMAL);
   }
-  else if (!strcmp(tmp, "solv.swipe_pro")) {
-      sscanf(string, "%s%d", tmp, &para->solv->swipe_pro);
-      sprintf(msg, "assign_parameter(): %s=%d", tmp, para->solv->swipe_pro);
+  else if (!strcmp(tmp, "solv.res_pro")) {
+      if (ifDouble) {
+          sscanf(string, "%s%lf", tmp, &para->solv->res_pro);
+      }
+      else {
+          sscanf(string, "%s%f", tmp, &para->solv->res_pro);
+      }
+      sprintf(msg, "assign_parameter(): %s=%f", tmp, para->solv->res_pro);
       ffd_log(msg, FFD_NORMAL);
   }
+  // MODIFIED BY EWAN FOR RESIDUAL SETTINGS FROM FIXED NUMBER OF ITERATIONS
   else if(!strcmp(tmp, "solv.check_residual")) {
     sscanf(string, "%s%d", tmp, &para->solv->check_residual);
     sprintf(msg, "assign_parameter(): %s=%d", tmp, para->solv->check_residual);
@@ -517,11 +539,40 @@ int assign_parameter(PARA_DATA *para, char *string) {
     }
     ffd_log(msg, FFD_NORMAL);
   }
-  else if(!strcmp(tmp, "solv.cosimulation")) {
-    sscanf(string, "%s%d", tmp, &para->solv->cosimulation);
-    sprintf(msg, "assign_parameter(): %s=%d", tmp, para->solv->cosimulation);
-    ffd_log(msg, FFD_NORMAL);
+  else if (!strcmp(tmp, "solv.tile_flow_correct")) {
+      sscanf(string, "%s%s", tmp, tmp2);
+      sprintf(msg, "assign_parameter(): %s=%s", tmp, tmp2);
+      if (!strcmp(tmp2, "AIRFLOW_BASE")) {
+          para->solv->tile_flow_correct = AIRFLOW_BASE;
+          ffd_log("AIRFLOW_BASE is not yet implemented, but simulation will be attempted.", FFD_NORMAL);
+      }
+      else if (!strcmp(tmp2, "PRESSURE_BASE")) {
+          para->solv->tile_flow_correct = PRESSURE_BASE;
+      }
+      else if (!strcmp(tmp2, "HYBRID_BASE")) {
+          para->solv->tile_flow_correct = HYBRID_BASE;
+          ffd_log("HYBRID_BASE is not yet implemented, but simulation will be attempted.", FFD_NORMAL);
+      }
+      else if (!strcmp(tmp2, "NS_SOURCE")) {
+          para->solv->tile_flow_correct = NS_SOURCE;
+      }
+      else if (!strcmp(tmp2, "NO_EXIST")) {
+          para->solv->tile_flow_correct = NO_EXIST;
+          ffd_log("NO_EXIST is not yet implemented, but simulation will be attempted.", FFD_NORMAL);
+      }
+      else {
+          sprintf(msg, "assign_parameter(): %s is not valid input for %s", tmp2, tmp);
+          ffd_log(msg, FFD_ERROR);
+          return 1;
+      }
+      ffd_log(msg, FFD_NORMAL);
   }
+  else if (!strcmp(tmp, "solv.cosimulation")) {
+      sscanf(string, "%s%d", tmp, &para->solv->cosimulation);
+      sprintf(msg, "assign_parameter(): %s=%d", tmp, para->solv->cosimulation);
+      ffd_log(msg, FFD_NORMAL);
+  }
+  
   /****************************************************************************
   | get the initial condition
   ****************************************************************************/
@@ -631,7 +682,6 @@ int assign_parameter(PARA_DATA *para, char *string) {
       ffd_log(msg, FFD_NORMAL);
     }
   }
-
   return 0;
 } // End of assign_parameter()
 

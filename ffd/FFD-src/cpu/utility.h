@@ -252,6 +252,21 @@ int min_distance(PARA_DATA *para, REAL **var, int **BINDEX);
 REAL vol_inflow(PARA_DATA *para, REAL **var, int **BINDEX);
 
 ///////////////////////////////////////////////////////////////////////////////
+/// Check the volumetric flow rate, requires cell definition
+///
+///\param para Pointer to FFD parameters
+///\param var Pointer to FFD simulation variables
+///\param psi Pointer to the variable
+///\param i Index in x direction
+///\param j Index in y direction
+///\param k Index in z direction
+///\param dir Direction of the flow, 1/-1 for x direction, 2/-2 for y direction, 3/-3 for z direction
+///
+///\return 0 if no error occurred
+///////////////////////////////////////////////////////////////////////////////
+REAL vol_flow_general(PARA_DATA* para, REAL** var, int i, int j, int k, int dir);
+
+///////////////////////////////////////////////////////////////////////////////
 /// Check the volumetric inflow rate
 ///
 ///\param para Pointer to FFD parameters

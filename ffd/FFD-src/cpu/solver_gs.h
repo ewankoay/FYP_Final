@@ -38,7 +38,7 @@
 ///
 ///\return Residual
 ///////////////////////////////////////////////////////////////////////////////
-int GS_itr(PARA_DATA *para, REAL **var, REAL *x, REAL *flag, int num_swipe);
+int GS_itr(PARA_DATA *para, REAL **var, REAL *x, REAL *flag, REAL residual_min);
 
 ///////////////////////////////////////////////////////////////////////////////
 /// Gauss-Seidel solver for terms other than pressure
@@ -50,7 +50,7 @@ int GS_itr(PARA_DATA *para, REAL **var, REAL *x, REAL *flag, int num_swipe);
 ///
 ///\return Residual
 ///////////////////////////////////////////////////////////////////////////////
-int Gauss_Seidel(PARA_DATA *para, REAL **var, REAL *x, REAL *flagp, int num_swipe);
+int Gauss_Seidel(PARA_DATA *para, REAL **var, REAL *x, REAL *flagp, REAL residual_min);
 
 ///////////////////////////////////////////////////////////////////////////////
 /// Jacobi Scheme for pressure
@@ -62,7 +62,7 @@ int Gauss_Seidel(PARA_DATA *para, REAL **var, REAL *x, REAL *flagp, int num_swip
 ///
 ///\return Residual
 ///////////////////////////////////////////////////////////////////////////////
-int Jacobi_iter(PARA_DATA *para, REAL **var, REAL *x, REAL *flag, int num_swipe);
+int Jacobi_iter(PARA_DATA *para, REAL **var, REAL *x, REAL *flag, int residual_min);
 
 ///////////////////////////////////////////////////////////////////////////////
 /// Jacobi solver for pressure
@@ -74,6 +74,6 @@ int Jacobi_iter(PARA_DATA *para, REAL **var, REAL *x, REAL *flag, int num_swipe)
 ///
 ///\return Residual
 ///////////////////////////////////////////////////////////////////////////////
-int Jacobi(PARA_DATA *para, REAL **var, REAL *flag, REAL *x, int num_swipe);
+int Jacobi(PARA_DATA *para, REAL **var, REAL *flag, REAL *x, int residual_min);
 
 #endif

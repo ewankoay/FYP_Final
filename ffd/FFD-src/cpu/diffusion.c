@@ -39,7 +39,8 @@
 int diffusion(PARA_DATA *para, REAL **var, int var_type, int index,
                REAL *psi, REAL *psi0, int **BINDEX) {
   int flag = 0;
-
+  /*sprintf(msg, "DIFFUSIONSTART_var: %d", var_type);
+  ffd_log(msg, FFD_NORMAL);*/
   /****************************************************************************
   | Define the coefficients for diffusion equation
   ****************************************************************************/
@@ -49,17 +50,42 @@ int diffusion(PARA_DATA *para, REAL **var, int var_type, int index,
             "diffusion equation.", FFD_ERROR);
     return flag;
   }
-  
+
+  int imax = para->geom->imax, jmax = para->geom->jmax;
+  int kmax = para->geom->kmax;
+  int IMAX = imax + 2, IJMAX = (imax + 2) * (jmax + 2);
+  REAL* T = var[TEMP];
+  /*sprintf(msg, "CHECKING_COEFDIFF %f", T[IX(40, 40, 41)] - T[IX(40, 40, 40)]);
+  ffd_log(msg, FFD_NORMAL);*/
+
   // Solve the equations
   if(equ_solver(para, var, DIF, var_type, psi)!=0) {
     ffd_log("diffusion(): failed to solve the equation", FFD_ERROR);
     return 1;
   }
 
+  /*sprintf(msg, "CHECKING_EQNSLV %f", T[IX(40, 40, 41)] - T[IX(40, 40, 40)]);
+  ffd_log(msg, FFD_NORMAL);*/
+
+
+  // Check residual BEFORE the boundary condition function corrupts the 'b' array
+ /* if (para->solv->check_residual == 1) {
+      REAL residual = 0.0;
+      if (var_type == TEMP || var_type == Xi1 || var_type == Xi2 || var_type == C1 || var_type == C2)
+          residual = check_residual(para, var, psi, var[FLAGP]);
+          
+      else if (var_type == VX) residual = check_residual(para, var, psi, var[FLAGU]);
+      else if (var_type == VY) residual = check_residual(para, var, psi, var[FLAGV]);
+      else if (var_type == VZ) residual = check_residual(para, var, psi, var[FLAGW]);
+
+      sprintf(msg, "Residual in diffusion (var_type %d): %e", var_type, residual);
+      ffd_log(msg, FFD_NORMAL);
+  }*/
+
   // Define B.C.
   set_bnd(para, var, var_type, index, psi, BINDEX);
-
   return flag;
+  
 } // End of diffusion( )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -342,12 +368,20 @@ int source_diff(PARA_DATA *para, REAL **var, int var_type, int index) {
   int IMAX = imax+2, IJMAX = (imax+2)*(jmax+2);
   REAL *b = var[B];
   REAL *ap = var[AP];
+  REAL* u = var[VX], * v = var[VY], * w = var[VZ];
 
   FOR_EACH_CELL
+    
     switch(var_type) {
       case VX:
+          if (i == 36 && k <= 21) {
+              /*sprintf(msg, "source b: %f ap: %f\n", var[VXS][IX(i, j, k)], var[APXS][IX(i, j, k)]);
+              ffd_log(msg, FFD_NORMAL);*/
+          }
         b[IX(i,j,k)] += var[VXS][IX(i,j,k)];
         ap[IX(i,j,k)] += var[APXS][IX(i,j,k)];
+        /*sprintf(msg, "source b: %f ap: %f\n", var[VXS][IX(i, j, k)], var[APXS][IX(i, j, k)]);
+        ffd_log(msg, FFD_NORMAL);*/
         break;
       case VY:
         b[IX(i,j,k)] += var[VYS][IX(i,j,k)];

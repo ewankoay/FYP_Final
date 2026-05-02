@@ -51,10 +51,18 @@ REAL check_residual(PARA_DATA *para, REAL **var, REAL *x, REAL *flag) {
         - af[IX(i,j,k)]*x[IX(i,j,k+1)] - ab[IX(i,j,k)]*x[IX(i,j,k-1)]
         - b[IX(i,j,k)])/ ap[IX(i, j, k)] );
     count += 1;
-
+    /*if (x == var[TEMP]) {
+        if (tmp > 0.001) {
+            sprintf(msg, "Residual_cell3_value: %e %d %d %d %f %f", tmp, i, j, k, x[IX(i, j, k)], (-ae[IX(i, j, k)] * x[IX(i + 1, j, k)] - aw[IX(i, j, k)] * x[IX(i - 1, j, k)]- an[IX(i, j, k)] * x[IX(i, j + 1, k)] - as[IX(i, j, k)] * x[IX(i, j - 1, k)]- af[IX(i, j, k)] * x[IX(i, j, k + 1)] - ab[IX(i, j, k)] * x[IX(i, j, k - 1)]- b[IX(i, j, k)]) / ap[IX(i, j, k)]);
+            ffd_log(msg, FFD_NORMAL);
+            sprintf(msg, "Residual_values: %f %f %f %f %f %f %f", ae[IX(i, j, k)]*x[IX(i + 1, j, k)], x[IX(i, j + 1, k)], af[IX(i, j, k)]*x[IX(i, j, k + 1)], x[IX(i - 1, j, k)], x[IX(i, j - 1, k)], x[IX(i, j, k - 1)], b[IX(i, j, k)]);
+            ffd_log(msg, FFD_NORMAL);
+            sprintf(msg, "Residual_coefficients: %f %f %f %f %f %f %f", ae[IX(i, j, k)], an[IX(i, j, k)], af[IX(i, j, k)], aw[IX(i, j, k)], as[IX(i, j, k)], ab[IX(i, j, k)], ap[IX(i, j, k)]);
+            ffd_log(msg, FFD_NORMAL);
+        }
+    }*/
     if (residual < tmp) residual = tmp;
     END_FOR
-
         //return tmp/count;
         return residual;
 
@@ -108,7 +116,7 @@ void ffd_log(char *message, FFD_MSG_TYPE msg_type) {
 ///////////////////////////////////////////////////////////////////////////////
 REAL outflow(PARA_DATA *para, REAL **var, REAL *psi, int **BINDEX) {
   int i, j, k;
-  int it;
+  int it, id;
   int imax = para->geom->imax, jmax = para->geom->jmax;
   int kmax = para->geom->kmax;
   int index= para->geom->index;
@@ -125,7 +133,7 @@ REAL outflow(PARA_DATA *para, REAL **var, REAL *psi, int **BINDEX) {
     i=BINDEX[0][it];
     j=BINDEX[1][it];
     k=BINDEX[2][it];
-    if(flagp[IX(i,j,k)]==2 || flagp[IX(i, j, k)] == TILE) {
+    if(flagp[IX(i,j,k)]==OUTLET || flagp[IX(i, j, k)] == TILE) {
       if(i==0)
         mass_out += psi[IX(i,j,k)] * (-u[IX(i,j,k)])
                   * (gy[IX(i,j,k)]-gy[IX(i,j-1,k)])
@@ -143,6 +151,18 @@ REAL outflow(PARA_DATA *para, REAL **var, REAL *psi, int **BINDEX) {
       if(k==kmax+1) mass_out += psi[IX(i,j,k)]*w[IX(i,j,k-1)]*(gx[IX(i,j,k)]
                           -gx[IX(i-1,j,k)])* (gy[IX(i,j,k)]-gy[IX(i,j-1,k)]);
     }
+    //else if (flagp[IX(i,j,k)]==RACK_INLET) {
+    //  id = BINDEX[4][it];
+    //  REAL Axy = (gx[IX(i,j,k)]-gx[IX(i-1,j,k)])*(gy[IX(i,j,k)]-gy[IX(i,j-1,k)]);
+    //  REAL Ayz = (gy[IX(i,j,k)]-gy[IX(i,j-1,k)])*(gz[IX(i,j,k)]-gz[IX(i,j,k-1)]);
+    //  REAL Azx = (gx[IX(i,j,k)]-gx[IX(i-1,j,k)])*(gz[IX(i,j,k)]-gz[IX(i,j,k-1)]);
+    //  if (para->bc->RackDir[id] == 1) mass_out += psi[IX(i-1,j,k)] * u[IX(i-1,j,k)] * Ayz;
+    //  else if (para->bc->RackDir[id] == -1) mass_out += psi[IX(i+1,j,k)] * (-u[IX(i,j,k)]) * Ayz;
+    //  else if (para->bc->RackDir[id] == 2) mass_out += psi[IX(i,j-1,k)] * v[IX(i,j-1,k)] * Azx;
+    //  else if (para->bc->RackDir[id] == -2) mass_out += psi[IX(i,j+1,k)] * (-v[IX(i,j,k)]) * Azx;
+    //  else if (para->bc->RackDir[id] == 3) mass_out += psi[IX(i,j,k-1)] * w[IX(i,j,k-1)] * Axy;
+    //  else if (para->bc->RackDir[id] == -3) mass_out += psi[IX(i,j,k+1)] * (-w[IX(i,j,k)]) * Axy;
+    //}
 
   }
 
@@ -162,7 +182,7 @@ REAL outflow(PARA_DATA *para, REAL **var, REAL *psi, int **BINDEX) {
 ///////////////////////////////////////////////////////////////////////////////
 REAL inflow(PARA_DATA *para, REAL **var, REAL *psi, int **BINDEX) {
   int i, j, k;
-  int it;
+  int it, id;
   int imax = para->geom->imax, jmax = para->geom->jmax;
   int kmax = para->geom->kmax;
   int index= para->geom->index;
@@ -194,6 +214,18 @@ REAL inflow(PARA_DATA *para, REAL **var, REAL *psi, int **BINDEX) {
           if(k==kmax+1) mass_in += psi[IX(i,j,k)]*(-w[IX(i,j,k)])*(gx[IX(i,j,k)]
                               -gx[IX(i-1,j,k)])* (gy[IX(i,j,k)]-gy[IX(i,j-1,k)]);
         }
+        //else if(flagp[IX(i,j,k)]==RACK_OUTLET) {
+        //  id = BINDEX[4][it];
+        //  REAL Axy = (gx[IX(i,j,k)]-gx[IX(i-1,j,k)])*(gy[IX(i,j,k)]-gy[IX(i,j-1,k)]);
+        //  REAL Ayz = (gy[IX(i,j,k)]-gy[IX(i,j-1,k)])*(gz[IX(i,j,k)]-gz[IX(i,j,k-1)]);
+        //  REAL Azx = (gx[IX(i,j,k)]-gx[IX(i-1,j,k)])*(gz[IX(i,j,k)]-gz[IX(i,j,k-1)]);
+        //  if (para->bc->RackDir[id] == 1) mass_in += psi[IX(i,j,k)] * u[IX(i,j,k)] * Ayz;
+        //  else if (para->bc->RackDir[id] == -1) mass_in += psi[IX(i,j,k)] * (-u[IX(i-1,j,k)]) * Ayz;
+        //  else if (para->bc->RackDir[id] == 2) mass_in += psi[IX(i,j,k)] * v[IX(i,j,k)] * Azx;
+        //  else if (para->bc->RackDir[id] == -2) mass_in += psi[IX(i,j,k)] * (-v[IX(i,j-1,k)]) * Azx;
+        //  else if (para->bc->RackDir[id] == 3) mass_in += psi[IX(i,j,k)] * w[IX(i,j,k)] * Axy;
+        //  else if (para->bc->RackDir[id] == -3) mass_in += psi[IX(i,j,k)] * (-w[IX(i,j,k-1)]) * Axy;
+        //}
     }
 
   return mass_in;
@@ -491,6 +523,7 @@ REAL qwall(PARA_DATA *para, REAL **var,int **BINDEX) {
   REAL axy, ayz, azx; // Area of surfaces
   REAL qwall_bc = 0.0;
   REAL *qflux = var[QFLUX];
+  REAL *qfluxbc = var[QFLUXBC];
   REAL *flagp = var[FLAGP];
   REAL A = 0.0;
 
@@ -504,11 +537,14 @@ REAL qwall(PARA_DATA *para, REAL **var,int **BINDEX) {
     azx = area_zx(para, var, i, j, k);
 
     if(flagp[IX(i,j,k)]==1) {
+      int is_q_const = (BINDEX[3][it] == 0); // 0: Constant heat flux, 1: Constant Temp
+      
       if(i==0) {
         if(flagp[IX(i+1,j,k)]<0) {
           D = 0.5 * length_x(para, var, i + 1, j, k);
           coeff_h = h_coef(para, var, i + 1, j, k, D);
-          qwall += (psi[IX(i,j,k)]-psi[IX(i+1,j,k)])*coeff_h*ayz;
+          if (is_q_const) qwall += qfluxbc[IX(i,j,k)] * ayz;
+          else qwall += (psi[IX(i,j,k)]-psi[IX(i+1,j,k)])*coeff_h*ayz;
           qwall_bc -= qflux[IX(i,j,k)]*ayz;
           A += ayz;
         }
@@ -517,7 +553,8 @@ REAL qwall(PARA_DATA *para, REAL **var,int **BINDEX) {
         if(flagp[IX(i-1,j,k)]<0) {
           D = 0.5 * length_x(para, var, i - 1, j, k);
           coeff_h = h_coef(para, var, i - 1, j, k, D);
-          qwall += (psi[IX(i,j,k)]-psi[IX(i-1,j,k)])*coeff_h*ayz;
+          if (is_q_const) qwall += qfluxbc[IX(i,j,k)] * ayz;
+          else qwall += (psi[IX(i,j,k)]-psi[IX(i-1,j,k)])*coeff_h*ayz;
           qwall_bc -= qflux[IX(i, j, k)] * ayz;
           A += ayz;
         }
@@ -526,14 +563,16 @@ REAL qwall(PARA_DATA *para, REAL **var,int **BINDEX) {
         if(flagp[IX(i+1,j,k)]<0) {
           D = 0.5 * length_x(para, var, i + 1, j, k);
           coeff_h = h_coef(para, var, i + 1, j, k, D);
-          qwall += (psi[IX(i,j,k)]-psi[IX(i+1,j,k)])*coeff_h*ayz;
+          if (is_q_const) qwall += qfluxbc[IX(i,j,k)] * ayz;
+          else qwall += (psi[IX(i,j,k)]-psi[IX(i+1,j,k)])*coeff_h*ayz;
           qwall_bc -= qflux[IX(i, j, k)] * ayz;
           A += ayz;
         }
         if(flagp[IX(i-1,j,k)]<0) {
           D = 0.5 * length_x(para, var, i - 1, j, k);
           coeff_h = h_coef(para, var, i - 1, j, k, D);
-          qwall += (psi[IX(i,j,k)]-psi[IX(i-1,j,k)])*coeff_h*ayz;
+          if (is_q_const) qwall += qfluxbc[IX(i,j,k)] * ayz;
+          else qwall += (psi[IX(i,j,k)]-psi[IX(i-1,j,k)])*coeff_h*ayz;
           qwall_bc -= qflux[IX(i, j, k)] * ayz;
           A += ayz;
         }
@@ -543,7 +582,8 @@ REAL qwall(PARA_DATA *para, REAL **var,int **BINDEX) {
         if(flagp[IX(i,j+1,k)]<0) {
           D = 0.5 * length_y(para, var, i, j + 1, k);
           coeff_h = h_coef(para, var, i, j + 1, k, D);
-          qwall += (psi[IX(i,j,k)]-psi[IX(i,j+1,k)])*coeff_h*azx;
+          if (is_q_const) qwall += qfluxbc[IX(i,j,k)] * azx;
+          else qwall += (psi[IX(i,j,k)]-psi[IX(i,j+1,k)])*coeff_h*azx;
           qwall_bc -= qflux[IX(i, j, k)] * azx;
           A += azx;
        }
@@ -552,7 +592,8 @@ REAL qwall(PARA_DATA *para, REAL **var,int **BINDEX) {
         if(flagp[IX(i,j-1,k)]<0) {
           D = 0.5 * length_y(para, var, i, j - 1, k);
           coeff_h = h_coef(para, var, i, j - 1, k, D);
-          qwall += (psi[IX(i,j,k)]-psi[IX(i,j-1,k)])*coeff_h*azx;
+          if (is_q_const) qwall += qfluxbc[IX(i,j,k)] * azx;
+          else qwall += (psi[IX(i,j,k)]-psi[IX(i,j-1,k)])*coeff_h*azx;
           qwall_bc -= qflux[IX(i, j, k)] * azx;
           A += azx;
         }
@@ -561,14 +602,16 @@ REAL qwall(PARA_DATA *para, REAL **var,int **BINDEX) {
         if(flagp[IX(i,j-1,k)]<0) {
           D = 0.5 * length_y(para, var, i, j - 1, k);
           coeff_h = h_coef(para, var, i, j - 1, k, D);
-          qwall += (psi[IX(i,j,k)]-psi[IX(i,j-1,k)])*coeff_h*azx;
+          if (is_q_const) qwall += qfluxbc[IX(i,j,k)] * azx;
+          else qwall += (psi[IX(i,j,k)]-psi[IX(i,j-1,k)])*coeff_h*azx;
           qwall_bc -= qflux[IX(i, j, k)] * azx;
           A += azx;
       }
         if(flagp[IX(i,j+1,k)]<0) {
           D = 0.5 * length_y(para, var, i, j + 1, k);
           coeff_h = h_coef(para, var, i, j + 1, k, D);
-          qwall += (psi[IX(i,j,k)]-psi[IX(i,j+1,k)])*coeff_h*azx;
+          if (is_q_const) qwall += qfluxbc[IX(i,j,k)] * azx;
+          else qwall += (psi[IX(i,j,k)]-psi[IX(i,j+1,k)])*coeff_h*azx;
           qwall_bc -= qflux[IX(i, j, k)] * azx;
           A += azx;
         }
@@ -578,7 +621,8 @@ REAL qwall(PARA_DATA *para, REAL **var,int **BINDEX) {
         if(flagp[IX(i,j,k+1)]<0) {
           D = 0.5 * length_z(para, var, i, j, k + 1);
           coeff_h = h_coef(para, var, i, j, k + 1, D);
-          qwall += (psi[IX(i,j,k)]-psi[IX(i,j,k+1)])*coeff_h*axy;
+          if (is_q_const) qwall += qfluxbc[IX(i,j,k)] * axy;
+          else qwall += (psi[IX(i,j,k)]-psi[IX(i,j,k+1)])*coeff_h*axy;
           qwall_bc -= qflux[IX(i, j, k)] * axy;
           A += axy;
         }
@@ -587,7 +631,8 @@ REAL qwall(PARA_DATA *para, REAL **var,int **BINDEX) {
         if(flagp[IX(i,j,k-1)]<0) {
           D = 0.5 * length_z(para, var, i, j, k - 1);
           coeff_h = h_coef(para, var, i, j, k - 1, D);
-          qwall += (psi[IX(i,j,k)]-psi[IX(i,j,k-1)])*coeff_h*axy;
+          if (is_q_const) qwall += qfluxbc[IX(i,j,k)] * axy;
+          else qwall += (psi[IX(i,j,k)]-psi[IX(i,j,k-1)])*coeff_h*axy;
           qwall_bc -= qflux[IX(i, j, k)] * axy;
           A += axy;
         }
@@ -596,18 +641,24 @@ REAL qwall(PARA_DATA *para, REAL **var,int **BINDEX) {
         if(flagp[IX(i,j,k+1)]<0) {
           D = 0.5 * length_z(para, var, i, j, k + 1);
           coeff_h = h_coef(para, var, i, j, k + 1, D);
-          qwall += (psi[IX(i,j,k)]-psi[IX(i,j,k+1)])*coeff_h*axy;
+          if (is_q_const) qwall += qfluxbc[IX(i,j,k)] * axy;
+          else qwall += (psi[IX(i,j,k)]-psi[IX(i,j,k+1)])*coeff_h*axy;
           qwall_bc -= qflux[IX(i, j, k)] * axy;
           A += axy;
         }
         if(flagp[IX(i,j,k-1)]<0) {
           D = 0.5 * length_z(para, var, i, j, k - 1);
           coeff_h = h_coef(para, var, i, j, k - 1, D);
-          qwall += (psi[IX(i,j,k)]-psi[IX(i,j,k-1)])*coeff_h*axy;
+          if (is_q_const) qwall += qfluxbc[IX(i,j,k)] * axy;
+          else qwall += (psi[IX(i,j,k)]-psi[IX(i,j,k-1)])*coeff_h*axy;
           qwall_bc -= qflux[IX(i, j, k)] * axy;
           A += axy;
         }
       }
+      /*if (isnan(psi[IX(i, j, k)] - psi[IX(i, j, k - 1)])) {
+          sprintf(msg, "CHECKING %f %d %d %d", psi[IX(i, j, k)] - psi[IX(i, j, k - 1)], i,j,k);
+          ffd_log(msg, FFD_NORMAL);
+      }*/
     }
   }
 
@@ -823,7 +874,7 @@ int min_distance(PARA_DATA *para, REAL **var, int **BINDEX) {
  ///////////////////////////////////////////////////////////////////////////////
 REAL vol_inflow(PARA_DATA *para, REAL **var, int **BINDEX) {
   int i, j, k;
-  int it;
+  int it, id;
   int imax = para->geom->imax, jmax = para->geom->jmax;
   int kmax = para->geom->kmax;
   int index = para->geom->index;
@@ -840,8 +891,8 @@ REAL vol_inflow(PARA_DATA *para, REAL **var, int **BINDEX) {
     i = BINDEX[0][it];
     j = BINDEX[1][it];
     k = BINDEX[2][it];
-
-    if (flagp[IX(i, j, k)] == 0) {
+    
+    if (flagp[IX(i, j, k)] == INLET) {
       if (i == 0) mass_in += u[IX(i, j, k)] * (gy[IX(i, j, k)]
           - gy[IX(i, j - 1, k)])* (gz[IX(i, j, k)] - gz[IX(i, j, k - 1)]);
 
@@ -860,9 +911,63 @@ REAL vol_inflow(PARA_DATA *para, REAL **var, int **BINDEX) {
       if (k == kmax + 1) mass_in += (-w[IX(i, j, k)])*(gx[IX(i, j, k)]
           - gx[IX(i - 1, j, k)])* (gy[IX(i, j, k)] - gy[IX(i, j - 1, k)]);
     }
+    //else if (flagp[IX(i, j, k)] == RACK_OUTLET) {
+    //  id = BINDEX[4][it];
+    //  REAL Axy = (gx[IX(i,j,k)]-gx[IX(i-1,j,k)])*(gy[IX(i,j,k)]-gy[IX(i,j-1,k)]);
+    //  REAL Ayz = (gy[IX(i,j,k)]-gy[IX(i,j-1,k)])*(gz[IX(i,j,k)]-gz[IX(i,j,k-1)]);
+    //  REAL Azx = (gx[IX(i,j,k)]-gx[IX(i-1,j,k)])*(gz[IX(i,j,k)]-gz[IX(i,j,k-1)]);
+    //  if (para->bc->RackDir[id] == 1) mass_in += u[IX(i,j,k)] * Ayz;
+    //  else if (para->bc->RackDir[id] == -1) mass_in += (-u[IX(i-1,j,k)]) * Ayz;
+    //  else if (para->bc->RackDir[id] == 2) mass_in += v[IX(i,j,k)] * Azx;
+    //  else if (para->bc->RackDir[id] == -2) mass_in += (-v[IX(i,j-1,k)]) * Azx;
+    //  else if (para->bc->RackDir[id] == 3) mass_in += w[IX(i,j,k)] * Axy;
+    //  else if (para->bc->RackDir[id] == -3) mass_in += (-w[IX(i,j,k-1)]) * Axy;
+    //}
   }
   return mass_in;
 } // End of vol_inflow()
+
+///////////////////////////////////////////////////////////////////////////////
+ /// Check the volumetric rate, requires the cells to be defined
+ ///
+ ///\param para Pointer to FFD parameters
+ ///\param var Pointer to FFD simulation variables
+ ///\param psi Pointer to the variable
+ ///\param BINDEX Pointer to the boundary index
+ ///
+ ///\return 0 if no error occurred
+ ///////////////////////////////////////////////////////////////////////////////
+REAL vol_flow_general(PARA_DATA* para, REAL** var, int i, int j, int k, int dir) {
+    int axis;
+    int imax = para->geom->imax, jmax = para->geom->jmax, kmax = para->geom->kmax;
+    int IMAX = imax + 2, IJMAX = (imax + 2) * (jmax + 2);
+    REAL* gx = var[GX], * gy = var[GY], * gz = var[GZ];
+    REAL* u = var[VX], * v = var[VY], * w = var[VZ];
+    REAL flow_rate = 0;
+
+    /*---------------------------------------------------------------------------
+    | Compute the total flow rate
+    ---------------------------------------------------------------------------*/
+
+	axis = abs(dir);
+
+    switch (axis) {
+    case 1: // X-Direction: Plane is YZ
+        flow_rate = u[IX(i, j, k)] * (gy[IX(i, j, k)] - gy[IX(i, j - 1, k)]) * (gz[IX(i, j, k)] - gz[IX(i, j, k - 1)]);
+        break;
+    case 2: // Y-Direction: Plane is XZ
+        flow_rate = v[IX(i, j, k)] * (gx[IX(i, j, k)] - gx[IX(i - 1, j, k)]) * (gz[IX(i, j, k)] - gz[IX(i, j, k - 1)]);
+        break;
+    case 3: // Z-Direction: Plane is XY
+        flow_rate = w[IX(i, j, k)] * (gx[IX(i, j, k)] - gx[IX(i - 1, j, k)]) * (gy[IX(i, j, k)] - gy[IX(i, j - 1, k)]);
+        break;
+    default:
+        sprintf(msg, "Invalid TileDir %d at coords %d, %d, %d\n", axis, i,j,k);
+        ffd_log(msg, FFD_ERROR);
+    }
+	flow_rate *= sign(dir); // Adjust the sign based on the direction
+    return flow_rate;
+} // End of vol_flow_general()
 
 ///////////////////////////////////////////////////////////////////////////////
 /// Check the volumetric inflow rate
@@ -876,7 +981,7 @@ REAL vol_inflow(PARA_DATA *para, REAL **var, int **BINDEX) {
 ///////////////////////////////////////////////////////////////////////////////
 REAL vol_outflow(PARA_DATA *para, REAL **var, int **BINDEX){
   int i, j, k;
-  int it;
+  int it, id;
   int imax = para->geom->imax, jmax = para->geom->jmax;
   int kmax = para->geom->kmax;
   int index= para->geom->index;
@@ -935,7 +1040,22 @@ REAL vol_outflow(PARA_DATA *para, REAL **var, int **BINDEX){
         mass_out += w[IX(i,j,k)]*(gx[IX(i,j,k)]
                           -gx[IX(i-1,j,k)])* (gy[IX(i,j,k)]-gy[IX(i,j-1,k)]);
       }
+      sprintf(msg, "CHECK_OUTLET,I,J,K, outflow: %d,%d,%d,%f,%f,%f,%f",
+          i, j, k, mass_out, u[IX(i, j, k)], v[IX(i, j, k)], w[IX(i, j, k)]);
+      ffd_log(msg, FFD_NORMAL);
     }
+    //else if (flagp[IX(i, j, k)] == RACK_INLET) {
+    //  id = BINDEX[4][it];
+    //  REAL Axy = (gx[IX(i,j,k)]-gx[IX(i-1,j,k)])*(gy[IX(i,j,k)]-gy[IX(i,j-1,k)]);
+    //  REAL Ayz = (gy[IX(i,j,k)]-gy[IX(i,j-1,k)])*(gz[IX(i,j,k)]-gz[IX(i,j,k-1)]);
+    //  REAL Azx = (gx[IX(i,j,k)]-gx[IX(i-1,j,k)])*(gz[IX(i,j,k)]-gz[IX(i,j,k-1)]);
+    //  if (para->bc->RackDir[id] == 1) mass_out += u[IX(i-1,j,k)] * Ayz;
+    //  else if (para->bc->RackDir[id] == -1) mass_out += (-u[IX(i,j,k)]) * Ayz;
+    //  else if (para->bc->RackDir[id] == 2) mass_out += v[IX(i,j-1,k)] * Azx;
+    //  else if (para->bc->RackDir[id] == -2) mass_out += (-v[IX(i,j,k)]) * Azx;
+    //  else if (para->bc->RackDir[id] == 3) mass_out += w[IX(i,j,k-1)] * Axy;
+    //  else if (para->bc->RackDir[id] == -3) mass_out += (-w[IX(i,j,k)]) * Axy;
+    //}
   }
 
   return mass_out;
@@ -1143,6 +1263,7 @@ REAL initial_inflows(PARA_DATA *para, REAL **var, int **BINDEX) {
     k = BINDEX[2][it];
     id = BINDEX[4][it];
     if (flagp[IX(i, j, k)] == INLET) {
+
       // West or East Boundary
       if (i == 0 || i == imax + 1) {
         A = area_yz(para, var, i, j, k);
@@ -1153,6 +1274,7 @@ REAL initial_inflows(PARA_DATA *para, REAL **var, int **BINDEX) {
           V_tmp = -1*u[IX(i, j, k)];
 
         QPort[id] += V_tmp*A;
+        inflow += V_tmp*A;
       }
       // South and North Boundary
       if (j == 0 || j == jmax + 1) {
@@ -1163,6 +1285,7 @@ REAL initial_inflows(PARA_DATA *para, REAL **var, int **BINDEX) {
         else
           V_tmp = -1*v[IX(i, j, k)];
 
+        QPort[id] += V_tmp*A;
         inflow += V_tmp*A;
       }
       // Ceiling and Floor Boundary
@@ -1174,8 +1297,13 @@ REAL initial_inflows(PARA_DATA *para, REAL **var, int **BINDEX) {
         else
           V_tmp = -1*w[IX(i, j, k)];
 
+        QPort[id] += V_tmp*A;
         inflow += V_tmp*A;
+        
       }
+      sprintf(msg, "CHECK_INLET,I,J,K, inflow: %d,%d,%d,%f,%f,%f,%f",
+          i, j, k, inflow, u[IX(i, j, k)], v[IX(i, j, k)], w[IX(i, j, k)]);
+      ffd_log(msg, FFD_NORMAL);
     }
   } //end of for
 

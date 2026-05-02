@@ -118,7 +118,6 @@ int check_num_racks(PARA_DATA *para, REAL **var, int **BINDEX) {
 
   // write the number of rack to global parameter
   para->bc->nb_rack = tmp;
-
   // return 0
   return 0;
 }
@@ -135,12 +134,11 @@ int check_num_racks(PARA_DATA *para, REAL **var, int **BINDEX) {
 int check_num_tiles(PARA_DATA *para, REAL **var, int **BINDEX) {
   char string[400];
   int tmp = 0;
-
   // Open the file
-  if((file_params=fopen(para->inpu->parameter_file_name,"r")) == NULL) {
-    fprintf(stderr,"Error:can not open the file \"%s\".\n",
-      para->inpu->parameter_file_name);
-    return 1;
+  if ((file_params = fopen(para->inpu->parameter_file_name, "r")) == NULL) {
+      fprintf(stderr, "Error:can not open the file \"%s\".\n",
+          para->inpu->parameter_file_name);
+      return 1;
   }
   // Read line by line
   while(fgets(string, 400, file_params) != NULL) {
@@ -149,6 +147,9 @@ int check_num_tiles(PARA_DATA *para, REAL **var, int **BINDEX) {
   }
   // close the file
   fclose(file_params);
+
+  // write the number of rack to global parameter
+  para->bc->nb_tiles = tmp;
 
   // return 0
   return tmp;
@@ -194,6 +195,7 @@ int read_sci_input(PARA_DATA *para, REAL **var, int **BINDEX) {
   REAL curtain_open_ratio = 0.0;  //temporarily store the curtain opening ratio
   REAL tile_opening = 1.0;
   int id_rack = 0; // the unique id for rack
+  int id_tile = 0; // the unique id for tile
   REAL momentum_kick = 0.0; // momentum force
   REAL h_momentum = 0.1524; // 0.1524 equals to 6 inches
   REAL beta_tmp = 0.0; // openting ratio of perforated tile
@@ -210,10 +212,17 @@ int read_sci_input(PARA_DATA *para, REAL **var, int **BINDEX) {
           para->inpu->parameter_file_name);
   ffd_log(msg, FFD_NORMAL);
 
-  // Ignore the first and second lines
+  //EWAN EDIT START (Dont ignore the lines, store the values in para->geom)
+  // Ignore the first and second lines (Old comment)
   fgets(string, 400, file_params);
+  sscanf(string, "%f %f %f", &para->geom->Lx, &para->geom->Ly, &para->geom->Lz);
+  sprintf(msg, "read_sci_input(): para->geom->Lx=%f, para->geom->Ly=%f, para->geom->Lz=%f", para->geom->Lx, para->geom->Ly, para->geom->Lz);
+  ffd_log(msg, FFD_NORMAL);
   fgets(string, 400, file_params);
-
+  sscanf(string, "%d %d %d", &para->geom->imax, &para->geom->jmax, &para->geom->kmax);
+  sprintf(msg, "read_sci_input(): para->geom->imax=%d, para->geom->jmax=%d, para->geom->kmax=%d", para->geom->imax, para->geom->jmax, para->geom->kmax);
+  ffd_log(msg, FFD_NORMAL);
+  // EWAN EDIT END
   /*****************************************************************************
   | Convert the cell dimensions defined by SCI to coordinates in FFD
   *****************************************************************************/
@@ -249,14 +258,14 @@ int read_sci_input(PARA_DATA *para, REAL **var, int **BINDEX) {
     for (k = 1; k <= kmax; k++) fscanf(file_params, "%f", &delz[k]);
     fscanf(file_params, "\n");
   }
-
-  // Store the locations of grid cell surfaces
+  
+  // Store the locations of grid cell surfaces (Old)
   tempx = 0.0; tempy = 0.0; tempz = 0.0;
-  for(i=0; i<=imax+1; i++) {
+  for (i = 0; i <= imax + 1; i++) {
     tempx += delx[i];
-    if(i>=imax) tempx = Lx;
-    for(j=0; j<=jmax+1; j++)
-      for(k=0; k<=kmax+1; k++) var[GX][IX(i,j,k)]=tempx;
+    if (i >= imax) tempx = Lx;
+    for (j = 0; j <= jmax + 1; j++)
+      for (k = 0; k <= kmax + 1; k++) var[GX][IX(i,j,k)] = tempx;
   }
 
   for(j=0; j<=jmax+1; j++) {
@@ -272,6 +281,39 @@ int read_sci_input(PARA_DATA *para, REAL **var, int **BINDEX) {
     for(i=0; i<=imax+1; i++)
       for(j=0; j<=jmax+1; j++) var[GZ][IX(i,j,k)] = tempz;
   }
+  
+
+  /*
+  // EWAN EDIT START: NO NEED 2 EXTRA STORAGE? Previous method creates an extra layer of cells of max distance
+  // Store the locations of grid cell surfaces 
+  tempx = 0.0; tempy = 0.0; tempz = 0.0;
+  for (i = 0; i <= imax; i++) {
+      tempx += delx[i];
+      //if (i >= imax) tempx = Lx;
+      for (j = 0; j <= jmax; j++)
+          for (k = 0; k <= kmax; k++) {
+              var[GX][IX(i, j, k)] = tempx;
+              sprintf(msg, "EWANTESTING %d,%d,%d,%f", i,j,k,tempx);
+              ffd_log(msg, FFD_NORMAL);
+          }
+      
+  }
+
+  for (j = 0; j <= jmax; j++) {
+      tempy += dely[j];
+      //if (j >= jmax) tempy = Ly;
+      for (i = 0; i <= imax; i++)
+          for (k = 0; k <= kmax; k++) var[GY][IX(i, j, k)] = tempy;
+  }
+
+  for (k = 0; k <= kmax; k++) {
+      tempz += delz[k];
+      //if (k >= kmax) tempz = Lz;
+      for (i = 0; i <= imax; i++)
+          for (j = 0; j <= jmax; j++) var[GZ][IX(i, j, k)] = tempz;
+  }
+  //EWAN EDIT END
+  */
 
   /*****************************************************************************
   | Convert the coordinates for cell surfaces to
@@ -301,7 +343,7 @@ int read_sci_input(PARA_DATA *para, REAL **var, int **BINDEX) {
   END_FOR
 
   // Get the wall property
-  //fgets(string, 400, file_params);
+  fgets(string, 400, file_params);
   //sscanf(string,"%d%d%d%d%d%d", &IWWALL, &IEWALL, &ISWALL,
          //&INWALL, &IBWALL, &ITWALL);
 
@@ -378,6 +420,9 @@ int read_sci_input(PARA_DATA *para, REAL **var, int **BINDEX) {
               U, V, W, TMP, MASS);
       ffd_log(msg, FFD_NORMAL);
 
+	  int resI = EI; // number of cells in I direction (EWAN)
+	  int resJ = EJ; // number of cells in J direction (EWAN)
+	  int resK = EK; // number of cells in K direction (EWAN)
       /*.......................................................................
       | Assign the boundary conditions to cells
       .......................................................................*/      
@@ -434,10 +479,52 @@ int read_sci_input(PARA_DATA *para, REAL **var, int **BINDEX) {
           }
         }
       }
+      
+      //REAL radius = (var[GY][IX(1, EJ, 1)] - var[GY][IX(1, SJ-1, 1)]) * 0.5; // radius of inlet
+      //REAL x_center = (var[GY][IX(1, SJ-1, 1)] + var[GY][IX(1, EJ, 1)]) * 0.5; // x coordinate of center
+      //REAL y_center = (var[GZ][IX(1, 1, SK-1)] + var[GZ][IX(1, 1, EK)]) * 0.5; // y coordinate of center
+      //sprintf(msg, "EWAN EDIT CIRCULAR: %lf %lf %lf %lf %lf", var[GZ][IX(1, 1, SK-1)], var[GZ][IX(1, 1, EK)], x_center, y_center, radius);
+      //ffd_log(msg, FFD_NORMAL);
+
       // Assign the inlet boundary condition for each cell
       for(ii=SI; ii<=EI; ii++){
-        for(ij=SJ; ij<=EJ; ij++){
-          for(ik=SK; ik<=EK; ik++) {
+        //for(ij=(SJ-1); ij<=EJ; ij++){     // ORIGINAL
+          //for(ik=(SK-1); ik<=EK; ik++) {  // ORIGINAL 
+		for (ij = SJ; ij <= EJ; ij++) {     // EWAN EDIT
+		  for (ik = SK; ik <= EK; ik++) {   // EWAN EDIT
+              /*
+              // EWAN: NEW FOR AND IF CONDITION, CIRCULAR INLET CONDITION
+              // EWAN
+              REAL x = var[GY][IX(ii, ij, ik)]; // x coordinate of the current row
+              REAL y = var[GZ][IX(ii, ij, ik)]; // y coordinate of the current row
+              REAL y_limit = sqrt(fabs(radius * radius - (x - x_center) * (x - x_center)));
+              REAL bj = (-y_limit + y_center);
+              REAL tj = (y_limit + y_center);
+              // EWAN
+              if (y >= bj && y <= tj) {
+                  BINDEX[0][index] = ii;
+                  BINDEX[1][index] = ij;
+                  BINDEX[2][index] = ik;
+                  BINDEX[4][index] = i;
+                  index++;
+
+                  var[TEMPBC][IX(ii, ij, ik)] = TMP;
+                  var[VXBC][IX(ii, ij, ik)] = U;
+                  var[VYBC][IX(ii, ij, ik)] = V;
+                  var[VZBC][IX(ii, ij, ik)] = W;
+                  var[Xi1BC][IX(ii, ij, ik)] = MASS;
+
+                  flagp[IX(ii, ij, ik)] = INLET; // Cell flag to be inlet
+                  sprintf(msg, "NEWTEST:QFLUXFLUX: %d %d %d %lf %lf %lf %lf", ii, ij, ik, y, bj, tj, var[GZ][IX(ii, ij, ik)]);
+                  ffd_log(msg, FFD_NORMAL);
+                  if (para->outp->version == DEBUG) {
+                      sprintf(msg, "read_sci_input(): get inlet cell[%d,%d,%d]=%.1f",
+                          ii, ij, ik, flagp[IX(ii, ij, ik)]);
+                      ffd_log(msg, FFD_NORMAL);
+              }
+                  */
+              
+			// Original code for non-circular inlet
             BINDEX[0][index] = ii;
             BINDEX[1][index] = ij;
             BINDEX[2][index] = ik;
@@ -455,6 +542,7 @@ int read_sci_input(PARA_DATA *para, REAL **var, int **BINDEX) {
               sprintf(msg, "read_sci_input(): get inlet cell[%d,%d,%d]=%.1f",
                 ii, ij, ik, flagp[IX(ii,ij,ik)]);
               ffd_log(msg, FFD_NORMAL);
+              
             }
           } // End of assigning the inlet B.C. for each cell
         }
@@ -545,6 +633,7 @@ int read_sci_input(PARA_DATA *para, REAL **var, int **BINDEX) {
       // Determine to assgin OUTLET or TILE
       if (strstr(para->bc->outletName[i], "Tile") != NULL) {
           tile_or_outlet = TILE;
+
           // read the direction tiles are put
           if (SI == EI)
             para->geom->tile_putX = 1;
@@ -793,9 +882,26 @@ int read_sci_input(PARA_DATA *para, REAL **var, int **BINDEX) {
       FFD_ERROR);
       return 1;
     }
+
     // set default value of 125 CFM/kW--->m3/s/w. 1 CFM = 0.00047194745 M3/s
-    for (i=0; i<para->bc->nb_rack;i++) {
-      para->bc->RackFlowRate[i] = 125*0.00047194745/1000;
+    for (i = 0; i < para->bc->nb_rack; i++) {
+        para->bc->RackFlowRate[i] = 125 * 0.00047194745 / 1000;
+    }
+
+    // allocate memory for the curtain activation
+    para->bc->RackCurtain = (REAL*)malloc(para->bc->nb_rack * sizeof(int));
+    if (para->bc->RackCurtain == NULL) {
+        ffd_log("read_sci_input(): Could not allocate memory for para->bc->RackCurtain.",
+            FFD_ERROR);
+        return 1;
+    }
+
+    // allocate memory for the curtain opening ratio
+    para->bc->RackCurtainOpening = (REAL*)malloc(para->bc->nb_rack * sizeof(REAL));
+    if (para->bc->RackCurtainOpening == NULL) {
+        ffd_log("read_sci_input(): Could not allocate memory for para->bc->RackCurtainOpening.",
+            FFD_ERROR);
+        return 1;
     }
 
     // allocate memory for the heat dissipation of rack in W
@@ -897,6 +1003,33 @@ int read_sci_input(PARA_DATA *para, REAL **var, int **BINDEX) {
     }
   } //end of if (para->bc->nb_rack != 0)
 
+  // initialize the variables associated with tile modeling
+  // allocate memory for cooling airflow direction for tiles
+  if (para->bc->nb_tiles != 0) {
+      // allocate memory for rack names
+      para->bc->tileName = (char**)malloc(para->bc->nb_tiles * sizeof(char*));
+      if (para->bc->tileName == NULL) {
+          ffd_log("read_sci_input(): Could not allocate memory for para->bc->rackName.",
+              FFD_ERROR);
+          return 1;
+      }
+
+	  tile_opening = 0.5; // initialize tile opening ratio
+
+      // allocate memory for the flow direction of rack
+      para->bc->TileDir = (int*)malloc(para->bc->nb_tiles * sizeof(int));
+      if (para->bc->TileDir == NULL) {
+          ffd_log("read_sci_input(): Could not allocate memory for para->bc->TileDir.",
+              FFD_ERROR);
+          return 1;
+      }
+      // set the default direction of flow in rack, to the X
+      for (i = 0; i < para->bc->nb_tiles; i++) {
+          para->bc->TileDir[i] = 1;
+      }
+      
+  } //end of if (para->bc->nb_rack != 0)
+
   // read data of all blocks and racks
   if(para->bc->nb_block!=0) {
     para->bc->blockName = (char**) malloc(para->bc->nb_block*sizeof(char*));
@@ -984,6 +1117,7 @@ int read_sci_input(PARA_DATA *para, REAL **var, int **BINDEX) {
           else {
               sscanf(para->bc->blockName[i], "%s%f", curtain_name_tmp, &curtain_open_ratio);
           }
+
         // assign the cell properties
         for(ii=SI; ii<=EI; ii++){
           for(ij=SJ; ij<=EJ; ij++){
@@ -1015,22 +1149,27 @@ int read_sci_input(PARA_DATA *para, REAL **var, int **BINDEX) {
           }
         }
       } //end of read the plastic curtain
-
+      
       // set the boundary conditions based on that if it is regular block or a rack
       // if it is a rack
       else if (strstr(para->bc->blockName[i], "Rack") != NULL) {
         // split the name information
         if (ifDouble) {
-          sscanf(para->bc->blockName[i], "%s%d%lf%lf", rack_name_tmp, &para->bc->RackDir[id_rack], &para->bc->HeatDiss[id_rack], &para->bc->RackFlowRate[id_rack]);
+          sscanf(para->bc->blockName[i], "%s%d%lf%lf%d%lf", rack_name_tmp, &para->bc->RackDir[id_rack], &para->bc->HeatDiss[id_rack], &para->bc->RackFlowRate[id_rack], &para->bc->RackCurtain[id_rack], &para->bc->RackCurtainOpening[id_rack]);
         }
         else {
-          sscanf(para->bc->blockName[i], "%s%d%f%f", rack_name_tmp, &para->bc->RackDir[id_rack], &para->bc->HeatDiss[id_rack], &para->bc->RackFlowRate[id_rack]);
+          sscanf(para->bc->blockName[i], "%s%d%f%f%d%f", rack_name_tmp, &para->bc->RackDir[id_rack], &para->bc->HeatDiss[id_rack], &para->bc->RackFlowRate[id_rack], &para->bc->RackCurtain[id_rack], &para->bc->RackCurtainOpening[id_rack]);
         }
+
+        /*sprintf(msg, "Rack name: %s, dir: %d, heatDiss: %f, RackFlowRate: %f RackActivation: %d RackCurtainOpeningRatio: %f", rack_name_tmp, para->bc->RackDir[id_rack], para->bc->HeatDiss[id_rack], para->bc->RackFlowRate[id_rack], para->bc->RackCurtain[id_rack], para->bc->RackCurtainOpening[id_rack]);
+        ffd_log(msg, FFD_NORMAL);*/
+        //printf("Rack name: %s, dir: %d, heatDiss: %f, RackFlowRate: %f RackActivation: %d RackCurtainOpeningRatio: %f\n", rack_name_tmp, para->bc->RackDir[id_rack], para->bc->HeatDiss[id_rack], para->bc->RackFlowRate[id_rack], para->bc->RackCurtain[id_rack], para->bc->RackCurtainOpening[id_rack]);
         // store the rack name to global variable (maximum 100)
         para->bc->rackName[id_rack] = (char *)malloc(100*sizeof(char));
         strcpy(para->bc->rackName[id_rack], (const char*) rack_name_tmp);
         // find the initial flow rate
         para->bc->RackFlowRate[id_rack] *= para->bc->HeatDiss[id_rack];
+
         // Find the map based on the flow direction
         if (para->bc->RackDir[id_rack] == 1 || para->bc->RackDir[id_rack] == -1) {
           para->bc->RackMap[id_rack][0] = EI-SI;
@@ -1147,7 +1286,6 @@ int read_sci_input(PARA_DATA *para, REAL **var, int **BINDEX) {
                   flagp[IX(ii,ij,ik)] = SOLID; // Flag for cells in the middle
                 }
               }
-
             } // End of assigning value for internal solid block
           } // End of assigning value for internal solid block
         } // End of assigning value for internal solid block
@@ -1159,6 +1297,137 @@ int read_sci_input(PARA_DATA *para, REAL **var, int **BINDEX) {
         // Update the index of rack
         id_rack += 1;
       }// end of if (strstr(para->bc->blockName[i], "Rack") != NULL)
+
+      else if (strstr(para->bc->blockName[i], "Tile") != NULL) {
+          // split the name information
+          if (ifDouble) {
+              sscanf(para->bc->blockName[i], "%s%d%lf", tile_name_tmp, &para->bc->TileDir[id_tile], &tile_opening);
+          }
+          else {
+              sscanf(para->bc->blockName[i], "%s%d%f", tile_name_tmp, &para->bc->TileDir[id_tile], &tile_opening);
+          }
+          // store the tile name to global variable (maximum 100)
+          para->bc->tileName[id_tile] = (char*)malloc(100 * sizeof(char));
+          strcpy(para->bc->tileName[id_tile], (const char*)tile_name_tmp);
+
+          //Store the cell information and boundary condition by looping all tile cells
+          for (ii = SI; ii <= EI; ii++) {
+              for (ij = SJ; ij <= EJ; ij++) {
+                  for (ik = SK; ik <= EK; ik++) {
+                      BINDEX[0][index] = ii;
+                      BINDEX[1][index] = ij;
+                      BINDEX[2][index] = ik;
+                      BINDEX[3][index] = FLTMP;
+                      BINDEX[4][index] = id_tile;
+                      BINDEX[5][index] = TILE;
+                      index++;
+					  // assign opening ratio for tile
+					  var[TILE_OPEN_BC][IX(ii, ij, ik)] = tile_opening;
+                      //printf("is opening is %f\n", var[TILE_OPEN_BC][IX(ii, ij, ik)]);
+
+                      // Calculate the resistance based on the paper
+                      // @inproceedings{vangilder2015development,
+                      //		title = { Development of a Raised - Floor Plenum Design Tool },
+                      //		author = { VanGilder, James W and Zhang, Xuanhang Simon },
+                      //		year = { 2015 },
+                      //		organization = { American Society of Mechanical Engineers }
+                      //		}
+                      // SHOULD MULTIPLE BY A 0.5 AT THE END, ACCORDINTG TO THE EQUATIONS.
+                      var[TILE_RESI_BC][IX(ii, ij, ik)] = 1 / pow(tile_opening, 2) * (1.0 + 0.5 * pow(1 - tile_opening, 0.75) + 1.414 * pow(1 - tile_opening, 0.375)) * 0.5;
+
+                      // assign thermal BCs
+                      switch (FLTMP) {
+                      case 1:
+                          var[TEMPBC][IX(ii, ij, ik)] = TMP;
+                          break;
+                      case 0:
+                          var[QFLUXBC][IX(ii, ij, ik)] = TMP;
+                          break;
+                      default:
+                          sprintf(msg, "read_sci_input(): Thermal BC (%d)"
+                              "for cell(%d,%d,%d) was not defined",
+                              FLTMP, ii, ij, ik);
+                          ffd_log(msg, FFD_ERROR);
+                          return 1;
+                      }
+                      // mark the face cells and cells in the middle
+                      if (para->bc->TileDir[id_tile] == 1) {
+                          if (ii == SI) {
+                              flagp[IX(ii, ij, ik)] = TILE_INLET; // Flag for tile inlet
+                          }
+                          else if (ii == EI) {
+                              flagp[IX(ii, ij, ik)] = TILE_OUTLET; // Flag for tile outlet
+                          }
+                          else {
+                              flagp[IX(ii, ij, ik)] = SOLID; // Flag for cells in the middle
+                          }
+                      }
+                      else if (para->bc->TileDir[id_tile] == -1) {
+                          if (ii == SI) {
+                              flagp[IX(ii, ij, ik)] = TILE_OUTLET; // Flag for tile outlet
+                          }
+                          else if (ii == EI) {
+                              flagp[IX(ii, ij, ik)] = TILE_INLET; // Flag for tile inlet
+                          }
+                          else {
+                              flagp[IX(ii, ij, ik)] = SOLID; // Flag for cells in the middle
+                          }
+                      }
+                      else if (para->bc->TileDir[id_tile] == 2) {
+                          if (ij == SJ) {
+                              flagp[IX(ii, ij, ik)] = TILE_INLET; // Flag for tile inlet
+                          }
+                          else if (ij == EJ) {
+                              flagp[IX(ii, ij, ik)] = TILE_OUTLET; // Flag for tile outlet
+                          }
+                          else {
+                              flagp[IX(ii, ij, ik)] = SOLID; // Flag for cells in the middle
+                          }
+                      }
+                      else if (para->bc->TileDir[id_tile] == -2) {
+                          if (ij == SJ) {
+                              flagp[IX(ii, ij, ik)] = TILE_OUTLET; // Flag for tile outlet
+                          }
+                          else if (ij == EJ) {
+                              flagp[IX(ii, ij, ik)] = TILE_INLET; // Flag for tile inlet
+                          }
+                          else {
+                              flagp[IX(ii, ij, ik)] = SOLID; // Flag for cells in the middle
+                          }
+                      }
+                      else if (para->bc->TileDir[id_tile] == 3) {
+                          if (ik == SK) {
+                              flagp[IX(ii, ij, ik)] = TILE_INLET; // Flag for tile inlet
+                          }
+                          else if (ik == EK) {
+                              flagp[IX(ii, ij, ik)] = TILE_OUTLET; // Flag for tile outlet
+                          }
+                          else {
+                              flagp[IX(ii, ij, ik)] = SOLID; // Flag for cells in the middle
+                          }
+                      }
+                      else if (para->bc->TileDir[id_tile] == -3) {
+                          if (ik == SK) {
+                              flagp[IX(ii, ij, ik)] = TILE_OUTLET; // Flag for tile outlet
+                          }
+                          else if (ik == EK) {
+                              flagp[IX(ii, ij, ik)] = TILE_INLET; // Flag for tile inlet
+                          }
+                          else {
+                              flagp[IX(ii, ij, ik)] = SOLID; // Flag for cells in the middle
+                          }
+                      }
+                      /*sprintf(msg, "coords: %d %d %d", ii,ij,ik);
+                      ffd_log(msg, FFD_NORMAL);*/
+                  } // End of assigning value for internal solid block
+              } // End of assigning value for internal solid block
+          } // End of assigning value for internal solid block
+
+          // Update the index of tile
+          id_tile += 1;
+          }// end of if (strstr(para->bc->blockName[i], "Tile") != NULL)
+
+
       // if it is a regular block
       else {
         // set the boundary conditions
@@ -1385,20 +1654,19 @@ int read_sci_input(PARA_DATA *para, REAL **var, int **BINDEX) {
   | Read other simulation data
   *****************************************************************************/
   // Discard the unused data
-  //fgets(string, 400, file_params); //maximum iteration
-  //fgets(string, 400, file_params); //maximum iteration
-  //fgets(string, 400, file_params); //convergence rate
-  //fgets(string, 400, file_params); //Turbulence model
-  //fgets(string, 400, file_params); //initial value
-  //fgets(string, 400, file_params); //minimum value
-  //fgets(string, 400, file_params); //maximum value
-  //fgets(string, 400, file_params); //fts value
-  //fgets(string, 400, file_params); //under relaxation
-  //fgets(string, 400, file_params); //reference point
-  //fgets(string, 400, file_params); //monitoring point
+  fgets(string, 400, file_params); //maximum iteration
+  fgets(string, 400, file_params); //convergence rate
+  fgets(string, 400, file_params); //Turbulence model
+  fgets(string, 400, file_params); //initial value
+  fgets(string, 400, file_params); //minimum value
+  fgets(string, 400, file_params); //maximum value
+  fgets(string, 400, file_params); //fts value
+  fgets(string, 400, file_params); //under relaxation
+  fgets(string, 400, file_params); //reference point
+  fgets(string, 400, file_params); //monitoring point
 
   // Discard setting for restarting the old FFD simulation
-  //fgets(string, 400, file_params);
+  fgets(string, 400, file_params);
   /*
   sscanf(string,"%d", &para->inpu->read_old_ffd_file);
   sprintf(msg, "read_sci_input(): para->inpu->read_old_ffd_file=%d",
@@ -1406,12 +1674,12 @@ int read_sci_input(PARA_DATA *para, REAL **var, int **BINDEX) {
   ffd_log(msg, FFD_NORMAL);
   */
   // Discard the unused data
-  //fgets(string, 400, file_params); //print frequency
-  //fgets(string, 400, file_params); //Pressure variable Y/N
-  //fgets(string, 400, file_params); //Steady state, buoyancy.
+  fgets(string, 400, file_params); //print frequency
+  fgets(string, 400, file_params); //Pressure variable Y/N
+  fgets(string, 400, file_params); //Steady state, buoyancy.
 
   // Discard physical properties
-  //fgets(string, 400, file_params);
+  fgets(string, 400, file_params);
   /*
   sscanf(string,"%f %f %f %f %f %f %f %f %f", &para->prob->rho,
          &para->prob->nu, &para->prob->cond,
@@ -1460,7 +1728,7 @@ int read_sci_input(PARA_DATA *para, REAL **var, int **BINDEX) {
           para->mytime->step_total);
   ffd_log(msg, FFD_NORMAL);
 
-  //fgets(string, 400, file_params); //prandtl
+  fgets(string, 400, file_params); //prandtl
 
   /*****************************************************************************
   | Conclude the reading process

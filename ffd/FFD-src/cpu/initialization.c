@@ -122,9 +122,11 @@ void set_default_parameter(PARA_DATA *para) {
     para->bc->nb_Xi = 0;
     para->bc->nb_C = 0;
     para->sens->nb_sensor = 0; // Number of sensors
-    para->solv->swipe_adv = 5; // 5 swipes for advection
-    para->solv->swipe_dif = 5; // 5 swipes for diffusion
-    para->solv->swipe_pro = 10; // 10 swipes for projection
+    // MODIFIED BY EWAN FOR RESIDUAL SETTINGS FROM FIXED NUMBER OF ITERATIONS
+    para->solv->res_adv = 0.001; // 0.001 minimum residuals for advection
+    para->solv->res_dif = 0.001; // 0.001 minimum residuals for diffusion
+    para->solv->res_pro = 0.001; // 0.001 minimum residuals for projection
+    // MODIFIED BY EWAN FOR RESIDUAL SETTINGS FROM FIXED NUMBER OF ITERATIONS
     para->solv->solver = GS; // use gauss seidels solver as default
     para->solv->check_conservation = 1; // check the scalar conervation stepwise
     para->prob->Tem_Ave_LastTime = 0.0;
@@ -138,6 +140,7 @@ void set_default_parameter(PARA_DATA *para) {
     para->bc->nb_rack = 0; // assume no racks
 	para->bc->outlet_bc = ZERO_GRADIENT; //PRESCRIBED_VALUE; // assume Neumann BC for outlet
     para->outp->result_file = VTK; // set the result file in tecplot format
+    para->mytime->num_resultfile = 1;
 
     /****************************************************************************
     | Determine if using a pressure correction or forced mass conservation
@@ -163,6 +166,7 @@ int set_initial_data(PARA_DATA *para, REAL **var, int **BINDEX) {
   para->mytime->t = 0.0;
   para->mytime->step_current = 0;
   para->outp->cal_mean = 0;
+  para->mytime->restart_total_steps = 0;
 
   /****************************************************************************
   | Set inital value for FFD variables
@@ -243,6 +247,8 @@ int set_initial_data(PARA_DATA *para, REAL **var, int **BINDEX) {
   if(para->inpu->parameter_file_format == SCI) {
     // check number of racks
     flag = check_num_racks(para, var, BINDEX);
+    // check number of tiles
+    flag = check_num_tiles(para, var, BINDEX);
     // read the sci input file line by line
     flag = read_sci_input(para, var, BINDEX);
     if(flag != 0) {
@@ -509,6 +515,7 @@ int init_para_simp(PARA_DATA *para, PARA_DATA_SIMP *para_simp) {
   para_simp->mytime.step_total = para->mytime->step_total;
   para_simp->mytime.step_current = para->mytime->step_current;
   para_simp->mytime.step_mean = para->mytime->step_mean;
+  para_simp->mytime.num_resultfile = para->mytime->num_resultfile;
   para_simp->mytime.t_start = para->mytime->t_start;
   para_simp->mytime.t_end = para->mytime->t_end;
 

@@ -32,18 +32,29 @@ int hasTile = 0;
 ///////////////////////////////////////////////////////////////////////////////
 int FFD_solver(PARA_DATA *para, REAL **var, int **BINDEX) {
   int step_total = para->mytime->step_total;
-  REAL t_steady = para->mytime->t_steady;
+  REAL t_stdy = para->mytime->t_steady;
   double t_cosim;
   int flag, next, bar=0;
 
-		// check the number of tiles in input file
+		/* check the number of tiles in input file*/
 		//if (check_num_tiles(&para, var, BINDEX)>0) hasTile = 1;
-		hasTile = 0;
+		//hasTile = 0;
 
   /***************************************************************************
   | Solver Loop
   ***************************************************************************/
-  next = 1;
+  // save initial result
+        if (para->outp->result_file == VTK) {
+            if (write_vtk_data_unsteady(para, var, "result") != 0) {
+                ffd_log("FFD_solver(): Could not write the result file.", FFD_ERROR);
+                return 1;
+            }
+        }
+        else {
+            write_tecplot_data_unsteady(para, var, "result");
+        }
+        
+next = 1;
   while(next==1) {
     // check the average temperature of fluid to calculate the energy conservation
     // need to have a vector to store the temperature for calculation of energy changing rate
@@ -85,7 +96,7 @@ int FFD_solver(PARA_DATA *para, REAL **var, int **BINDEX) {
               FFD_NORMAL);
 
     // Start to record data for calculating mean velocity if needed
-    if(para->mytime->t>t_steady && para->outp->cal_mean==0) {
+    if(para->mytime->t_steady && para->outp->cal_mean==0) {
       para->outp->cal_mean = 1;
       flag = reset_time_averaged_data(para, var);
       if(flag != 0) {
@@ -106,7 +117,29 @@ int FFD_solver(PARA_DATA *para, REAL **var, int **BINDEX) {
         return 1;
       }
     }
+    
+    int step_result = (step_total- para->mytime->restart_total_steps) / para->mytime->num_resultfile;
+
+    sprintf(msg, "QFLUXFLUX, %d, %d, %d",
+        step_total, step_result, para->mytime->step_current);
+    ffd_log(msg, FFD_NORMAL);
+
+    // save result for every step_result
+    if (para->mytime->step_current % step_result == 0) {
+        if (para->outp->result_file == VTK) {
+            if (write_vtk_data_unsteady(para, var, "result") != 0) {
+                ffd_log("FFD_solver(): Could not write the result file.", FFD_ERROR);
+                return 1;
+            }
+        }
+        else {
+            write_tecplot_data_unsteady(para, var, "result");
+        }
+    }
+    
     next = para->mytime->step_current < step_total ? 1 : 0;
+    
+
   } // End of While loop
   return flag;
 } // End of FFD_solver( )
@@ -132,6 +165,12 @@ int temp_step(PARA_DATA *para, REAL **var, int **BINDEX) {
     return flag;
   }
 
+  int imax = para->geom->imax, jmax = para->geom->jmax;
+  int kmax = para->geom->kmax;
+  int IMAX = imax + 2, IJMAX = (imax + 2) * (jmax + 2);
+  /*sprintf(msg, "CHECKING_ADVECT %f", T[IX(40, 40, 41)] - T[IX(40, 40, 40)]);
+  ffd_log(msg, FFD_NORMAL);*/
+
   //if (para->solv->check_conservation) para->prob->Tem_Ave_LastTime = average_volume(para, var, var[TMP1]);
 
   // check residual after iterative solver
@@ -145,17 +184,20 @@ int temp_step(PARA_DATA *para, REAL **var, int **BINDEX) {
     sprintf(msg, "Energy imbalance (W) after using implicit scheme: %f", para->prob->Energy_Imb_Adv);
     ffd_log(msg, FFD_NORMAL);
   }
-
+  
   // if using the standard Semi-Lagrangian method for advection
   // then apply the restoration of energy conservation
   // Wei Tian 6/20/2017, @Schneider Electric, Andover, MA
   if (para->solv->advection_solver == SEMI) {
-    //flag = scalar_conservation(para, var, T, T0, BINDEX);
+    flag = scalar_conservation(para, var, T, T0, BINDEX);
     if (flag != 0) {
       ffd_log("temp_step(): Could not conserve temperature.", FFD_ERROR);
       return flag;
     }
   }
+
+  /*sprintf(msg, "CHECKING_DIFF %f", T[IX(40, 40, 41)] - T[IX(40, 40, 40)]);
+  ffd_log(msg, FFD_NORMAL);*/
 
   flag = diffusion(para, var, TEMP, 0, T, T0, BINDEX);
   if(flag!=0) {
@@ -163,14 +205,19 @@ int temp_step(PARA_DATA *para, REAL **var, int **BINDEX) {
     return flag;
   }
 
+  /*sprintf(msg, "CHECKING_DIFF %f", T[IX(40, 40, 41)] - T[IX(40, 40, 40)]);
+  ffd_log(msg, FFD_NORMAL);*/
+  
+  
   // check residual after iterative solver
   if (para->solv->check_residual == 1) {
     residual = check_residual(para, var, T, var[FLAGP]);
     //printf("residual after diffusion is: %f\n", residual);
     //getchar();
-    sprintf(msg, "Residual in diffusion T: %f", residual);
+    sprintf(msg, "Residual in diffusion T: %e", residual);
     ffd_log(msg, FFD_NORMAL);
   }
+
   return flag;
 } // End of temp_step( )
 
@@ -251,22 +298,44 @@ int vel_step(PARA_DATA *para, REAL **var,int **BINDEX) {
   REAL *u0 = var[TMP1], *v0 = var[TMP2], *w0 = var[TMP3];
   REAL residual = 0.0;
   int flag = 0;
+  
+  int i, j, k;
+  int imax = para->geom->imax, jmax = para->geom->jmax;
+  int kmax = para->geom->kmax;
+  int IMAX = imax + 2, IJMAX = (imax + 2) * (jmax + 2);
+  REAL resistance = 0;
+  REAL tile_opening = 0.35;
+  REAL area = 0;
 
   // Model tile
-		if (hasTile) {
+		if (para->bc->nb_tiles != 0) {
 			if (para->solv->tile_flow_correct == PRESSURE_BASE)
 				flag = assign_tile_velocity(para, var, BINDEX);
 			else if (para->solv->tile_flow_correct == NS_SOURCE)
 				flag = tile_source(para, var, BINDEX);
-			else
-				flag = 0;
+            else {
+                flag = 0;
+                ffd_log("CHECK3", FFD_ERROR);
+            }
 
 			if (flag != 0) {
 				ffd_log("vel_step(): Could not determine the velocity for the tiles in pure tile modeling.", FFD_ERROR);
 				return flag;
 			}
 		}
+    //resistance = 1 / pow(tile_opening, 2) * (1.0 + 0.5 * pow(1 - tile_opening, 0.75) + 1.414 * pow(1 - tile_opening, 0.375)) * 0.5;
 
+    //FOR_EACH_CELL
+    //  if (i == 31 && j >= 11 && j <=30 && k <= 20) {
+    //      area = area_yz(para, var, i, j, k);
+    //      var[APXS][IX(i, j, k)] = 2 * area * resistance * pow(u[IX(i, j, k)], 1) * sign(u[IX(i, j, k)]);
+    //      var[VXS][IX(i, j, k)] = 1 * area * resistance * pow(u[IX(i, j, k)], 2)*sign(u[IX(i, j, k)]);
+    //      /*var[APXS][IX(i, j, k)] = 0;*/
+    //      /*var[VXS][IX(i, j, k)] = 3;*/
+    //      /*sprintf(msg, "source b: %f ap: %f\n", var[VXS][IX(i, j, k)], var[APXS][IX(i, j, k)]);
+    //      ffd_log(msg, FFD_NORMAL);*/
+    //  }
+    //END_FOR
   // Call rack black model if there is any rack
   if (para->bc->nb_rack !=0) {
     if (rack_model_black_box(para, var, BINDEX) != 0) {
@@ -323,7 +392,7 @@ int vel_step(PARA_DATA *para, REAL **var,int **BINDEX) {
   // check residual after iterative solver
   if (para->solv->check_residual == 1) {
     residual = check_residual(para, var, u, var[FLAGU]);
-    sprintf(msg, "Residual in diffusion U: %f", residual);
+    sprintf(msg, "Residual in diffusion U: %e", residual);
     ffd_log(msg, FFD_NORMAL);
   }
 
@@ -336,7 +405,7 @@ int vel_step(PARA_DATA *para, REAL **var,int **BINDEX) {
   // check residual after iterative solver
   if (para->solv->check_residual == 1) {
     residual = check_residual(para, var, v, var[FLAGV]);
-    sprintf(msg, "Residual in diffusion V: %f", residual);
+    sprintf(msg, "Residual in diffusion V: %e", residual);
     ffd_log(msg, FFD_NORMAL);
   }
 
@@ -349,8 +418,16 @@ int vel_step(PARA_DATA *para, REAL **var,int **BINDEX) {
   // check residual after iterative solver
   if (para->solv->check_residual == 1) {
     residual = check_residual(para, var, w, var[FLAGW]);
-    sprintf(msg, "Residual in diffusion W: %f", residual);
+    sprintf(msg, "Residual in diffusion W: %e", residual);
     ffd_log(msg, FFD_NORMAL);
+  }
+
+  // Apply forced mass conservation BEFORE projection to ensure the 
+  // Pressure-Poisson equation has a mathematically compatible right-hand side.
+  if(para->bc->nb_outlet!=0 && para->solv->mass_conservation_on ==1) flag = mass_conservation(para, var,BINDEX);
+  if(flag!=0) {
+    ffd_log("vel_step(): Could not conduct mass conservation correction.", FFD_ERROR);
+    return flag;
   }
 
   flag = project(para, var,BINDEX);
@@ -360,12 +437,12 @@ int vel_step(PARA_DATA *para, REAL **var,int **BINDEX) {
   }
 
     // forced mass conservation function is NOT on after projection is Pressure-based correction is applied to tiles.
-  if(para->bc->nb_outlet!=0 && para->solv->mass_conservation_on ==1) flag = mass_conservation(para, var,BINDEX);
+  /*if(para->bc->nb_outlet!=0 && para->solv->mass_conservation_on ==1) flag = mass_conservation(para, var,BINDEX);
   if(flag!=0) {
     ffd_log("vel_step(): Could not conduct mass conservation correction.",
             FFD_ERROR);
     return flag;
-  }
+  }*/
   return flag;
 } // End of vel_step( )
 
@@ -383,7 +460,7 @@ int equ_solver(PARA_DATA *para, REAL **var, FFD_TERM which_term, int var_type, R
   REAL *flagp = var[FLAGP], *flagu = var[FLAGU];
   REAL *flagv = var[FLAGV], *flagw = var[FLAGW];
   int flag = 0;
-  int num_swipe = 0;
+  REAL residual_min = 0;
   /************************************************************************************************/
   // By knowing the different terms, either advection, or, diffusion
   // now FFD can allow setting different number of iterations for each term, separately
@@ -394,41 +471,41 @@ int equ_solver(PARA_DATA *para, REAL **var, FFD_TERM which_term, int var_type, R
   /************************************************************************************************/
   if (which_term == ADV) {
     // advection
-    num_swipe = para->solv->swipe_adv;
+    residual_min = para->solv->res_adv;
   }
   else if (which_term == DIF) {
     // diffusion
-    num_swipe = para->solv->swipe_dif;
+    residual_min = para->solv->res_dif;
   }
   else
-    // by default it is 5 swipes, or 30 iterations
-    num_swipe = 5;
+    // by default it is 0.001
+    residual_min = 0.001;
 
   switch(var_type) {
     case VX:
       if (para->solv->solver == GS) {
-          Gauss_Seidel(para, var, psi, flagu, num_swipe);
+          Gauss_Seidel(para, var, psi, flagu, residual_min);
       }
       else {
-          Jacobi(para, var, psi, flagu, num_swipe);
+          Jacobi(para, var, psi, flagu, residual_min);
       }
     break;
 
     case VY:
       if (para->solv->solver == GS) {
-          Gauss_Seidel(para, var, psi, flagv, num_swipe);
+          Gauss_Seidel(para, var, psi, flagv, residual_min);
       }
       else {
-          Jacobi(para, var, psi, flagv, num_swipe);
+          Jacobi(para, var, psi, flagv, residual_min);
       }
     break;
 
     case VZ:
       if (para->solv->solver == GS) {
-          Gauss_Seidel(para, var, psi, flagw, num_swipe);
+          Gauss_Seidel(para, var, psi, flagw, residual_min);
       }
       else {
-          Jacobi(para, var, psi, flagw, num_swipe);
+          Jacobi(para, var, psi, flagw, residual_min);
       }
     break;
     case TEMP:
@@ -438,10 +515,10 @@ int equ_solver(PARA_DATA *para, REAL **var, FFD_TERM which_term, int var_type, R
     case C1:
     case C2:
       if (para->solv->solver == GS) {
-          Gauss_Seidel(para, var, psi, flagp, num_swipe);
+          Gauss_Seidel(para, var, psi, flagp, residual_min);
       }
       else {
-          Jacobi(para, var, psi, flagp, num_swipe);
+          Jacobi(para, var, psi, flagp, residual_min);
       }
     break;
     default:
@@ -508,7 +585,7 @@ int CheckImbalance(PARA_DATA *para, REAL **var, int var_type, int **BINDEX) {
       exit(1);
     }
     fprintf(FILE_IM, "Time\t\tInflow\t\tOutflow\t\tWall\t\tDeficit\t\tEnergyRate\t\tAdvEnergy\t\tImbalance (Ein+Ewall-Eout)/Ewall\n");
-    fprintf(FILE_IM, "%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n",para->mytime->t, in, out, wall, (in - out +wall), rate_of_change, para->prob->Energy_Imb_Adv, fabs(in-out+wall)/wall);
+    fprintf(FILE_IM, "%f\t%e\t%e\t%e\t%e\t%e\t%e\t%e\n",para->mytime->t, in, out, wall, (in - out +wall), rate_of_change, para->prob->Energy_Imb_Adv, fabs(in-out+wall)/wall);
     fclose(FILE_IM);
   }
   else {
@@ -517,7 +594,7 @@ int CheckImbalance(PARA_DATA *para, REAL **var, int var_type, int **BINDEX) {
       fprintf(stderr, "Error:can not open error file!\n");
       exit(1);
     }
-    fprintf(FILE_IM, "%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n", para->mytime->t, in, out, wall, (in - out + wall), rate_of_change, para->prob->Energy_Imb_Adv, fabs(in - out + wall) / wall);
+    fprintf(FILE_IM, "%f\t%e\t%e\t%e\t%e\t%e\t%e\t%e\n", para->mytime->t, in, out, wall, (in - out + wall), rate_of_change, para->prob->Energy_Imb_Adv, fabs(in - out + wall) / wall);
     fclose(FILE_IM);
   }
   return 0;
@@ -583,6 +660,9 @@ int scalar_conservation(PARA_DATA *para, REAL **var, REAL *psi0, REAL *psi, int 
     surplus += V_cell*rho*Cp*psi0[IX(i, j, k)];
     surplus -= V_cell*rho*Cp*psi[IX(i, j, k)];
   END_FOR
+
+  // Log the tracked advection imbalance (convert J back to W) so it prints in CheckImbalance [EWAN]
+  para->prob->Energy_Imb_Adv = surplus / para->mytime->dt;
 
   // calculate the maximum and minimum of the original and departure value as denominator for ita
   denominator = SMALL; // to avoid divide by zero
@@ -682,6 +762,7 @@ REAL adv_inconservation(PARA_DATA *para, REAL **var, REAL *psi0, REAL *psi, int 
 ///\ 09/05/2017
 //////////////////////////////////////////////////////////////////////////////////////
 int assign_tile_velocity(PARA_DATA *para, REAL **var, int **BINDEX) {
+  ffd_log("CHECK1", FFD_NORMAL);
   REAL *u = var[VX], *v = var[VY], *w = var[VZ];
   int i, j, k;
   int imax = para->geom->imax, jmax = para->geom->jmax;
@@ -701,6 +782,7 @@ int assign_tile_velocity(PARA_DATA *para, REAL **var, int **BINDEX) {
   REAL axy=0.0, ayz=0.0, azx=0.0;
   REAL rho = para->prob->rho;
   int count = 0;
+  int massConsIter = 0;
   // if it is the begin of the simulation, then do an estimation
   if (para->mytime->step_current == 0) {
     for (it = 0; it < index; it++) {
@@ -754,6 +836,8 @@ int assign_tile_velocity(PARA_DATA *para, REAL **var, int **BINDEX) {
   }
   // otherwise, correct the pressure to meet the mass flow rate
   else {
+    sprintf(msg, "check_epsilon1_1: %f, NEXT: %d", epsilon1, NEXT);
+    ffd_log(msg, FFD_NORMAL);
     // initial values for p_corr with two rough assumptions
     p_corr1 = 0;
     epsilon1 = pressure_correction(para, var, BINDEX, p_corr1);
@@ -772,6 +856,8 @@ int assign_tile_velocity(PARA_DATA *para, REAL **var, int **BINDEX) {
       p_corr3 = 0;
       NEXT = 0;
     }
+    sprintf(msg, "check_epsilon1_2: %f, NEXT: %d", epsilon1, NEXT);
+    ffd_log(msg, FFD_NORMAL);
     if (NEXT){
       // evaluate the guessed corrected pressure good enough or not
       epsilon2 = pressure_correction(para, var, BINDEX, p_corr2);
@@ -789,6 +875,7 @@ int assign_tile_velocity(PARA_DATA *para, REAL **var, int **BINDEX) {
     }
     // find p_corr
     while (NEXT) {
+      massConsIter += 1;
       epsilon3 = pressure_correction(para, var, BINDEX, p_corr3);
       if (fabs(epsilon3) < 1e-5) {
         NEXT = 0;
@@ -810,6 +897,10 @@ int assign_tile_velocity(PARA_DATA *para, REAL **var, int **BINDEX) {
       }
       count += 1;
     }
+    sprintf(msg, "Number of Iterations: %d", massConsIter);
+    ffd_log(msg, FFD_NORMAL);
+    sprintf(msg, "Residual in Tile Mass Cons: %e", epsilon3);
+    ffd_log(msg, FFD_NORMAL);
     //printf("***********************************\n");
     //printf("epsilon3 is %f\n",epsilon3);
     //getchar();
@@ -871,19 +962,31 @@ REAL pressure_correction(PARA_DATA *para, REAL **var, int **BINDEX, REAL p_corr)
   REAL epsilon=1e6, corrected_flow=0.0, in_flowrate=0.0, out_flowrate = 0.0;
   REAL axy, ayz, azx;
   REAL rho = para->prob->rho;
+  REAL* gx = var[GX], * gy = var[GY], * gz = var[GZ];
+  REAL* u = var[VX], * v = var[VY], * w = var[VZ];
+
+  // the pressure correction is done by correcting the flow rates of all the tiles simultaneously, not individually. 
+  // The flow rates at the tiles are determined by the pressure difference between the tile and the fluid. So by correcting 
+  // the pressure, the flow rates at the tiles are corrected, and thus the mass conservation is satisfied.
 
   in_flowrate = vol_inflow(para, var, BINDEX);
   out_flowrate = vol_outflow(para, var, BINDEX);
   in_flowrate -= out_flowrate;
+
   //printf("the inflow is %f\n", in_flowrate);
+
+  // Loop all the boundary cells
   for (it = 0; it < index; it++) {
     i = BINDEX[0][it];
     j = BINDEX[1][it];
     k = BINDEX[2][it];
-    axy = area_xy(para, var, i, j, k);
-    ayz = area_yz(para, var, i, j, k);
-    azx = area_zx(para, var, i, j, k);
+
     if (flagp[IX(i, j, k)] == TILE) {
+        // calculate the area
+        axy = area_xy(para, var, i, j, k);
+        ayz = area_yz(para, var, i, j, k);
+        azx = area_zx(para, var, i, j, k);
+
       //printf("the coefficient is %f\n", var[TILE_RESI_BC][IX(i, j, k)]);
       if (i==imax+1 || i==0){
         if ((p[IX(i, j, k)] + p_corr)>0)
@@ -904,8 +1007,11 @@ REAL pressure_correction(PARA_DATA *para, REAL **var, int **BINDEX, REAL p_corr)
           corrected_flow -= pow(fabs((p[IX(i, j, k)] + p_corr) / (var[TILE_RESI_BC][IX(i, j, k)] * rho)), 0.5)*axy;
       }
     }
+
   } //end of for
   epsilon = corrected_flow - in_flowrate;
+  /*sprintf(msg, "corrected_flow: %f, in_flowrate: %f, epsilon: %e", corrected_flow, in_flowrate, epsilon);
+  ffd_log(msg, FFD_NORMAL);*/
   //printf("difference is %f, p corr is %f\n", epsilon, p_corr);
   //getchar();
   return epsilon;
@@ -920,6 +1026,7 @@ REAL pressure_correction(PARA_DATA *para, REAL **var, int **BINDEX, REAL p_corr)
 ///\ Wei Tian, 10-19-2017, Wei.Tian@Schneider-Electric.com
 //////////////////////////////////////////////////////////////////////////////////////
 int tile_source(PARA_DATA *para, REAL **var, int **BINDEX) {
+  ffd_log("CHECK2", FFD_NORMAL);
   int i, j, k, tile_index;
   int imax = para->geom->imax, jmax = para->geom->jmax;
   int kmax = para->geom->kmax;
@@ -942,8 +1049,10 @@ int tile_source(PARA_DATA *para, REAL **var, int **BINDEX) {
       axy = area_xy(para, var, i, j, k);
       ayz = area_yz(para, var, i, j, k);
       azx = area_zx(para, var, i, j, k);
+      
 
       if (flagp[IX(i, j, k)] == TILE) {
+
         if (put_X){
           if (u[IX(i, j, k)] > 0){
             for (tile_index=0; tile_index<split_limitX; tile_index++) {
@@ -1037,8 +1146,13 @@ int rack_model_black_box(PARA_DATA *para, REAL **var, int **BINDEX) {
   int IMAX = imax+2, IJMAX = (imax+2)*(jmax+2);
   REAL axy, ayz, azx;
   REAL mDot_Cp, Q_dot;
+  REAL resistance;
+  REAL tile_opening;
+  REAL area;
+  int tmp_i, tmp_j, tmp_k;
+  REAL* u = var[VX], * v = var[VY], * w = var[VZ];
 
-  // Loop all the boundary cells
+  // Pass 1: Handle RACK_INLET cells
   for(it=0; it<index; it++) {
   i = BINDEX[0][it];
   j = BINDEX[1][it];
@@ -1051,16 +1165,25 @@ int rack_model_black_box(PARA_DATA *para, REAL **var, int **BINDEX) {
   ayz = area_yz(para, var, i, j, k);
   azx = area_zx(para, var, i, j, k);
 
+  tile_opening = para->bc->RackCurtainOpening[id];
+
   // If it is rack cell and it is a rack inlet boundary
-  if (obj_type == RACK) {
-      // Assign velocity to the inlet of rack
-      if (flagp[IX(i,j,k)]==RACK_INLET){
+    if (obj_type == RACK && flagp[IX(i,j,k)] == RACK_INLET) {
           if (para->bc->RackDir[id] == 1 || para->bc->RackDir[id] == -1) {
               var[VXBC][IX(i,j,k)] = para->bc->RackFlowRate[id]/para->bc->RackArea[id]*sign(para->bc->RackDir[id])/*direction*/;
               var[VYBC][IX(i,j,k)] = 0.0;
               var[VZBC][IX(i,j,k)] = 0.0;
               // Assign the adjacent fluid cell temperature to the inlet of rack
               var[TEMPBC][IX(i,j,k)] = var[TEMP][IX(i-sign(para->bc->RackDir[id]),j,k)];
+
+            // Calculate the source term for the cells above the inlet of rack to represent the flow resistance of rack curtain
+              if (para->bc->RackCurtain[id] == 1) {
+                  resistance = 1 / pow(tile_opening, 2) * (1.0 + 0.5 * pow(1 - tile_opening, 0.75) + 1.414 * pow(1 - tile_opening, 0.375)) * 0.5;
+                area = ayz;
+                tmp_i = i - sign(para->bc->RackDir[id]);
+                var[APXS][IX(tmp_i, j, k)] = 2 * area * resistance * pow(fabs(u[IX(tmp_i, j, k)]), 1);
+                  var[VXS][IX(tmp_i, j, k)] = 1 * area * resistance * pow(u[IX(tmp_i, j, k)], 2) * sign(u[IX(tmp_i, j, k)]);
+              }
           }
           else if (para->bc->RackDir[id] == 2 || para->bc->RackDir[id] == -2) {
               var[VYBC][IX(i,j,k)] = para->bc->RackFlowRate[id]/para->bc->RackArea[id]*sign(para->bc->RackDir[id])/*direction*/;
@@ -1068,6 +1191,15 @@ int rack_model_black_box(PARA_DATA *para, REAL **var, int **BINDEX) {
               var[VZBC][IX(i,j,k)] = 0.0;
               // Assign the adjacent fluid cell temperature to the inlet of rack
               var[TEMPBC][IX(i,j,k)] = var[TEMP][IX(i,j-sign(para->bc->RackDir[id]),k)];
+
+              // Calculate the source term for the cells above the inlet of rack to represent the flow resistance of rack curtain
+              if (para->bc->RackCurtain[id] == 1) {
+                  resistance = 1 / pow(tile_opening, 2) * (1.0 + 0.5 * pow(1 - tile_opening, 0.75) + 1.414 * pow(1 - tile_opening, 0.375)) * 0.5;
+                area = azx;
+                tmp_j = j - sign(para->bc->RackDir[id]);
+                var[APYS][IX(i, tmp_j, k)] = 2 * area * resistance * pow(fabs(v[IX(i, tmp_j, k)]), 1);
+                  var[VYS][IX(i, tmp_j, k)] = 1 * area * resistance * pow(v[IX(i, tmp_j, k)], 2) * sign(v[IX(i, tmp_j, k)]);
+              }
           }
           else if (para->bc->RackDir[id] == 3 || para->bc->RackDir[id] == -3) {
               var[VZBC][IX(i,j,k)] = para->bc->RackFlowRate[id]/para->bc->RackArea[id]*sign(para->bc->RackDir[id])/*direction*/;
@@ -1075,67 +1207,109 @@ int rack_model_black_box(PARA_DATA *para, REAL **var, int **BINDEX) {
               var[VYBC][IX(i,j,k)] = 0.0;
               // Assign the adjacent fluid cell temperature to the inlet of rack
               var[TEMPBC][IX(i,j,k)] = var[TEMP][IX(i,j,k-sign(para->bc->RackDir[id]))];
+
+              // Calculate the source term for the cells above the inlet of rack to represent the flow resistance of rack curtain
+              if (para->bc->RackCurtain[id] == 1) {
+                  resistance = 1 / pow(tile_opening, 2) * (1.0 + 0.5 * pow(1 - tile_opening, 0.75) + 1.414 * pow(1 - tile_opening, 0.375)) * 0.5;
+                area = axy;
+                tmp_k = k - sign(para->bc->RackDir[id]);
+                var[APZS][IX(i, j, tmp_k)] = 2 * area * resistance * pow(fabs(w[IX(i, j, tmp_k)]), 1);
+                  var[VZS][IX(i, j, tmp_k)] = 1 * area * resistance * pow(w[IX(i, j, tmp_k)], 2) * sign(w[IX(i, j, tmp_k)]);
+              }
           }
           else {
             ffd_log("rack_model_black_box(): fail to detect the flow direction of the rack", FFD_ERROR);
             return 1;
           }
+    }
+  }
 
-      }
-      // Assign velocity and temperature to outlet of rack
-      else if (flagp[IX(i,j,k)]==RACK_OUTLET) {
-        if (para->bc->RackDir[id] == 1 || para->bc->RackDir[id] == -1) {
-          var[VXBC][IX(i,j,k)] = para->bc->RackFlowRate[id]/para->bc->RackArea[id]*sign(para->bc->RackDir[id])/*direction*/;
-          var[VYBC][IX(i,j,k)] = 0.0;
-          var[VZBC][IX(i,j,k)] = 0.0;
-          // Calculate the temperature at the outlet of rack
-          if (k==0){// This is to eliminate the divide by zero scenario
-            ayz = area_yz(para, var, i, j, k+1);
-          }
-          iin = i - sign(para->bc->RackDir[id])*para->bc->RackMap[id][0];
-          jin = j - sign(para->bc->RackDir[id])*para->bc->RackMap[id][1];
-          kin = k - sign(para->bc->RackDir[id])*para->bc->RackMap[id][2];
-          Q_dot = para->bc->HeatDiss[id]*ayz/para->bc->RackArea[id]; // heat dissipation by area
-          mDot_Cp = para->prob->rho*var[VXBC][IX(i,j,k)]*ayz*para->prob->Cp; // mass flow rate multiply Cp
-          var[TEMPBC][IX(i,j,k)] = var[TEMPBC][IX(iin,jin,kin)] + sign(para->bc->RackDir[id])*Q_dot/mDot_Cp;
-          //printf("rack_model_black_box(): temperature at outlet of rack [%d, %d, %d]: %f\n",i,j,k,var[TEMPBC][IX(i,j,k)]);
-          //printf("rack_model_black_box(): velocity at outlet of rack [%d, %d, %d]: %f\n",i,j,k,var[VXBC][IX(i,j,k)]);
-        }
-        else if (para->bc->RackDir[id] == 2 || para->bc->RackDir[id] == -2) {
-          var[VYBC][IX(i,j,k)] = para->bc->RackFlowRate[id]/para->bc->RackArea[id]*sign(para->bc->RackDir[id])/*direction*/;
-          var[VXBC][IX(i,j,k)] = 0.0;
-          var[VZBC][IX(i,j,k)] = 0.0;
-          // Calculate the temperature at the outlet of rack
-          iin = i - sign(para->bc->RackDir[id])*para->bc->RackMap[id][0];
-          jin = j - sign(para->bc->RackDir[id])*para->bc->RackMap[id][1];
-          kin = k - sign(para->bc->RackDir[id])*para->bc->RackMap[id][2];
-          Q_dot = para->bc->HeatDiss[id]*azx/para->bc->RackArea[id]; // heat dissipation by area
-          mDot_Cp = para->prob->rho*var[VYBC][IX(i,j,k)]*azx*para->prob->Cp; // mass flow rate multiply Cp
-          var[TEMPBC][IX(i,j,k)] = var[TEMPBC][IX(iin,jin,kin)] + Q_dot/mDot_Cp;
-        }
-        else if (para->bc->RackDir[id] == 3 || para->bc->RackDir[id] == -3) {
-          var[VZBC][IX(i,j,k)] = para->bc->RackFlowRate[id]/para->bc->RackArea[id]*sign(para->bc->RackDir[id])/*direction*/;
-          var[VXBC][IX(i,j,k)] = 0.0;
-          var[VYBC][IX(i,j,k)] = 0.0;
-          // Calculate the temperature at the outlet of rack
-          iin = i - sign(para->bc->RackDir[id])*para->bc->RackMap[id][0];
-          jin = j - sign(para->bc->RackDir[id])*para->bc->RackMap[id][1];
-          kin = k - sign(para->bc->RackDir[id])*para->bc->RackMap[id][2];
-          Q_dot = para->bc->HeatDiss[id]*axy/para->bc->RackArea[id]; // heat dissipation by area
-          mDot_Cp = para->prob->rho*var[VZBC][IX(i,j,k)]*axy*para->prob->Cp; // mass flow rate multiply Cp
-          var[TEMPBC][IX(i,j,k)] = var[TEMPBC][IX(iin,jin,kin)] + Q_dot/mDot_Cp;
-        }
-        else {
-          ffd_log("rack_model_black_box(): fail to detect the flow direction of the rack", FFD_ERROR);
-          return 1;
-        }
-      } //end of else if (flagp[IX(i,j,k)]==RACK_OUTLET)
-      // Pass internal rack cells
-      else {
-        continue;
-      } //end of else
-    } //end of if (obj_type == RACK)
-  } //end of for(it=0; it<index; it++)
-  // return 0
+  // Pass 2: Handle RACK_OUTLET cells
+  for(it=0; it<index; it++) {
+    i = BINDEX[0][it];
+    j = BINDEX[1][it];
+    k = BINDEX[2][it];
+    id = BINDEX[4][it];
+    obj_type = BINDEX[5][it];
+
+    if (obj_type == RACK && flagp[IX(i,j,k)] == RACK_OUTLET) {
+      // calculate the area
+      axy = area_xy(para, var, i, j, k);
+      ayz = area_yz(para, var, i, j, k);
+      azx = area_zx(para, var, i, j, k);
+      tile_opening = para->bc->RackCurtainOpening[id];
+
+                if (para->bc->RackDir[id] == 1 || para->bc->RackDir[id] == -1) {
+                  var[VXBC][IX(i,j,k)] = para->bc->RackFlowRate[id]/para->bc->RackArea[id]*sign(para->bc->RackDir[id])/*direction*/;
+                  var[VYBC][IX(i,j,k)] = 0.0;
+                  var[VZBC][IX(i,j,k)] = 0.0;
+                  // Calculate the temperature at the outlet of rack
+                  if (k==0){// This is to eliminate the divide by zero scenario
+                    ayz = area_yz(para, var, i, j, k+1);
+                  }
+                  iin = i - sign(para->bc->RackDir[id])*para->bc->RackMap[id][0];
+                  jin = j - sign(para->bc->RackDir[id])*para->bc->RackMap[id][1];
+                  kin = k - sign(para->bc->RackDir[id])*para->bc->RackMap[id][2];
+                  Q_dot = para->bc->HeatDiss[id]*ayz/para->bc->RackArea[id]; // heat dissipation by area
+                  mDot_Cp = para->prob->rho*var[VXBC][IX(i,j,k)]*ayz*para->prob->Cp; // mass flow rate multiply Cp
+                  var[TEMPBC][IX(i,j,k)] = var[TEMPBC][IX(iin,jin,kin)] + sign(para->bc->RackDir[id])*Q_dot/mDot_Cp;
+
+                  // Calculate the source term for the cells above the inlet of rack to represent the flow resistance of rack curtain
+                  if (para->bc->RackCurtain[id] == 1) {
+                      resistance = 1 / pow(tile_opening, 2) * (1.0 + 0.5 * pow(1 - tile_opening, 0.75) + 1.414 * pow(1 - tile_opening, 0.375)) * 0.5;
+            area = ayz;
+            tmp_i = i + sign(para->bc->RackDir[id]);
+            var[APXS][IX(tmp_i, j, k)] = 2 * area * resistance * pow(fabs(u[IX(tmp_i, j, k)]), 1);
+                      var[VXS][IX(tmp_i, j, k)] = 1 * area * resistance * pow(u[IX(tmp_i, j, k)], 2) * sign(u[IX(tmp_i, j, k)]);
+                  }
+                }
+                else if (para->bc->RackDir[id] == 2 || para->bc->RackDir[id] == -2) {
+                  var[VYBC][IX(i,j,k)] = para->bc->RackFlowRate[id]/para->bc->RackArea[id]*sign(para->bc->RackDir[id])/*direction*/;
+                  var[VXBC][IX(i,j,k)] = 0.0;
+                  var[VZBC][IX(i,j,k)] = 0.0;
+                  // Calculate the temperature at the outlet of rack
+                  iin = i - sign(para->bc->RackDir[id])*para->bc->RackMap[id][0];
+                  jin = j - sign(para->bc->RackDir[id])*para->bc->RackMap[id][1];
+                  kin = k - sign(para->bc->RackDir[id])*para->bc->RackMap[id][2];
+                  Q_dot = para->bc->HeatDiss[id]*azx/para->bc->RackArea[id]; // heat dissipation by area
+                  mDot_Cp = para->prob->rho*var[VYBC][IX(i,j,k)]*azx*para->prob->Cp; // mass flow rate multiply Cp
+        var[TEMPBC][IX(i,j,k)] = var[TEMPBC][IX(iin,jin,kin)] + sign(para->bc->RackDir[id])*Q_dot/mDot_Cp;
+
+                  // Calculate the source term for the cells above the inlet of rack to represent the flow resistance of rack curtain
+                  if (para->bc->RackCurtain[id] == 1) {
+                      resistance = 1 / pow(tile_opening, 2) * (1.0 + 0.5 * pow(1 - tile_opening, 0.75) + 1.414 * pow(1 - tile_opening, 0.375)) * 0.5;
+            area = azx;
+            tmp_j = j + sign(para->bc->RackDir[id]);
+            var[APYS][IX(i, tmp_j, k)] = 2 * area * resistance * pow(fabs(v[IX(i, tmp_j, k)]), 1);
+                      var[VYS][IX(i, tmp_j, k)] = 1 * area * resistance * pow(v[IX(i, tmp_j, k)], 2) * sign(v[IX(i, tmp_j, k)]);
+                  }
+                }
+                else if (para->bc->RackDir[id] == 3 || para->bc->RackDir[id] == -3) {
+                  var[VZBC][IX(i,j,k)] = para->bc->RackFlowRate[id]/para->bc->RackArea[id]*sign(para->bc->RackDir[id])/*direction*/;
+                  var[VXBC][IX(i,j,k)] = 0.0;
+                  var[VYBC][IX(i,j,k)] = 0.0;
+                  // Calculate the temperature at the outlet of rack
+                  iin = i - sign(para->bc->RackDir[id])*para->bc->RackMap[id][0];
+                  jin = j - sign(para->bc->RackDir[id])*para->bc->RackMap[id][1];
+                  kin = k - sign(para->bc->RackDir[id])*para->bc->RackMap[id][2];
+                  Q_dot = para->bc->HeatDiss[id]*axy/para->bc->RackArea[id]; // heat dissipation by area
+                  mDot_Cp = para->prob->rho*var[VZBC][IX(i,j,k)]*axy*para->prob->Cp; // mass flow rate multiply Cp
+        var[TEMPBC][IX(i,j,k)] = var[TEMPBC][IX(iin,jin,kin)] + sign(para->bc->RackDir[id])*Q_dot/mDot_Cp;
+
+                  // Calculate the source term for the cells above the inlet of rack to represent the flow resistance of rack curtain
+                  if (para->bc->RackCurtain[id] == 1) {
+                      resistance = 1 / pow(tile_opening, 2) * (1.0 + 0.5 * pow(1 - tile_opening, 0.75) + 1.414 * pow(1 - tile_opening, 0.375)) * 0.5;
+            area = axy;
+            tmp_k = k + sign(para->bc->RackDir[id]);
+            var[APZS][IX(i, j, tmp_k)] = 2 * area * resistance * pow(fabs(w[IX(i, j, tmp_k)]), 1);
+                      var[VZS][IX(i, j, tmp_k)] = 1 * area * resistance * pow(w[IX(i, j, tmp_k)], 2) * sign(w[IX(i, j, tmp_k)]);
+                  }
+                }
+                else {
+                  ffd_log("rack_model_black_box(): fail to detect the flow direction of the rack", FFD_ERROR);
+                  return 1;
+                }
+    }
+  }
   return 0;
 }

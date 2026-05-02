@@ -173,31 +173,42 @@ int ffd(int cosimulation) {
       return 1;
   }
 
+/*---------------------------------------------------------------------------
+| Record ffd file for restart
+---------------------------------------------------------------------------*/
+  if (write_oldffd_data(&para, var, "oldinput") != 0) {
+      ffd_log("FFD_solver(): Could not write the result file", FFD_ERROR);
+      return 1;
+  }
+
   /*---------------------------------------------------------------------------
   | Post Process
   ---------------------------------------------------------------------------*/
   // Calculate mean value
+  /*
   if(para.outp->cal_mean == 1)
     average_time(&para, var);
-  /*
+  
   if(write_unsteady(&para, var, "unsteady")!=0) {
     ffd_log("FFD_solver(): Could not write the file unsteady.plt.", FFD_ERROR);
     return 1;
   }
-  */
+  
 		//write_vtk_data(&para, var, "result");
 		
 		if (para.outp->result_file == VTK) {
-			if (write_vtk_data(&para, var, "result") != 0) {
+			//if (write_vtk_data(&para, var, "result") != 0) {
+            if (write_vtk_data_unsteady(&para, var, "result") != 0) {
 				ffd_log("FFD_solver(): Could not write the result file.", FFD_ERROR);
 				return 1;
 			}
 		}
 		else {
-			write_tecplot_data(&para, var, "result");
+            write_tecplot_data_unsteady(&para, var, "result");
+			//write_tecplot_data(&para, var, "result");
 			//write_tecplot_all_data(&para, var, "result_all");
 		}
-
+        */
   /*
   if(para.outp->version == RUN)
     write_tecplot_all_data(&para, var, "result_all");

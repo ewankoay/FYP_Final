@@ -82,8 +82,10 @@ int write_tecplot_data(PARA_DATA *para, REAL **var, char *name) {
   int kmax = para->geom->kmax;
   int IMAX = imax + 2, IJMAX = (imax + 2) * (jmax + 2);
   REAL *x = var[X], *y = var[Y], *z = var[Z];
-  REAL *u = var[VXM], *v = var[VYM], *w = var[VZM], *p = var[IP];
-  REAL *T = var[TEMPM], *Xi = var[Xi1];
+  //REAL *u = var[VXM], *v = var[VYM], *w = var[VZM], *p = var[IP];
+  //REAL *T = var[TEMPM], *Xi = var[Xi1];
+  REAL* u = var[VX], * v = var[VY], * w = var[VZ], * p = var[IP];
+  REAL* T = var[TEMP], * Xi = var[Xi1];
   REAL *flagp = var[FLAGP];
   char *filename;
   FILE *datafile;
@@ -194,11 +196,26 @@ int write_vtk_data(PARA_DATA *para, REAL **var, char *name) {
   int kmax = para->geom->kmax;
   int IMAX = imax + 2, IJMAX = (imax + 2) * (jmax + 2);
   REAL *x = var[X], *y = var[Y], *z = var[Z];
-  REAL *u = var[VXM], *v = var[VYM], *w = var[VZM], *p = var[IP];
-  REAL *T = var[TEMPM], *Xi = var[Xi1];
+  //REAL *u = var[VXM], *v = var[VYM], *w = var[VZM], *p = var[IP];
+  //REAL *T = var[TEMPM], *Xi = var[Xi1];
+  REAL* u = var[VX], * v = var[VY], * w = var[VZ], * p = var[IP];
+  REAL* T = var[TEMP], * Xi = var[Xi1];
   REAL *flagp = var[FLAGP];
   char *filename;
   FILE *datafile;
+  const char *vtk_type;
+  const char *vtk_fmt;
+  const char *vtk_fmt_vec;
+
+  if (ifDouble == 1) {
+    vtk_type = "double";
+    vtk_fmt = "%.16g\t";
+    vtk_fmt_vec = "%.16g\t%.16g\t%.16g\n";
+  } else {
+    vtk_type = "float";
+    vtk_fmt = "%f\t";
+    vtk_fmt_vec = "%f\t%f\t%f\n";
+  }
 
   /****************************************************************************
   | Allocate memory for filename
@@ -238,29 +255,29 @@ int write_vtk_data(PARA_DATA *para, REAL **var, char *name) {
   fprintf(datafile, "DIMENSIONS\t%d\t%d\t%d\n", imax + 2, jmax + 2, kmax + 2);
 
   // Next line: X direction coordinate number
-  fprintf(datafile, "X_COORDINATES %d float\n", imax + 2);
+  fprintf(datafile, "X_COORDINATES %d %s\n", imax + 2, vtk_type);
 
   // Next line: X direction coordinate
   for (i = 0; i <= imax + 1; i++) {
-    fprintf(datafile, "%f\t", x[IX(i, jmax, kmax)]);
+    fprintf(datafile, vtk_fmt, x[IX(i, jmax, kmax)]);
   }
   fprintf(datafile, "\n");
 
   // Next line: Y direction coordinate number
-  fprintf(datafile, "Y_COORDINATES %d float\n", jmax + 2);
+  fprintf(datafile, "Y_COORDINATES %d %s\n", jmax + 2, vtk_type);
 
   // Next line: Y direction coordinate
   for (i = 0; i <= jmax + 1; i++) {
-    fprintf(datafile, "%f\t", y[IX(imax, i, kmax)]);
+    fprintf(datafile, vtk_fmt, y[IX(imax, i, kmax)]);
   }
   fprintf(datafile, "\n");
 
   // Next line: Z direction coordinate number
-  fprintf(datafile, "Z_COORDINATES %d float\n", kmax + 2);
+  fprintf(datafile, "Z_COORDINATES %d %s\n", kmax + 2, vtk_type);
 
   // Next line: Z direction coordinate
   for (i = 0; i <= kmax + 1; i++) {
-    fprintf(datafile, "%f\t", z[IX(imax, jmax, i)]);
+    fprintf(datafile, vtk_fmt, z[IX(imax, jmax, i)]);
   }
   fprintf(datafile, "\n");
 
@@ -268,26 +285,26 @@ int write_vtk_data(PARA_DATA *para, REAL **var, char *name) {
   fprintf(datafile, "POINT_DATA %d\n", (imax + 2) * (jmax + 2) * (kmax + 2));
 
   // Next three lines: Write scalar variable T
-  fprintf(datafile, "SCALARS T float 1\n");
+  fprintf(datafile, "SCALARS T %s 1\n", vtk_type);
   fprintf(datafile, "LOOKUP_TABLE default\n");
   FOR_ALL_CELL
-  fprintf(datafile, "%f\t", T[IX(i, j, k)]);
+  fprintf(datafile, vtk_fmt, T[IX(i, j, k)]);
   END_FOR
   fprintf(datafile, "\n");
 
   // Next three lines: Write scalar variable P
-  fprintf(datafile, "SCALARS P float 1\n");
+  fprintf(datafile, "SCALARS P %s 1\n", vtk_type);
   fprintf(datafile, "LOOKUP_TABLE default\n");
   FOR_ALL_CELL
-  fprintf(datafile, "%f\t", p[IX(i, j, k)]);
+  fprintf(datafile, vtk_fmt, p[IX(i, j, k)]);
   END_FOR
   fprintf(datafile, "\n");
 
   // Next three lines: Write scalar speed VEL
-  fprintf(datafile, "SCALARS VEL float 1\n");
+  fprintf(datafile, "SCALARS VEL %s 1\n", vtk_type);
   fprintf(datafile, "LOOKUP_TABLE default\n");
   FOR_ALL_CELL
-  fprintf(datafile, "%f\t",
+  fprintf(datafile, vtk_fmt,
           sqrt(u[IX(i, j, k)] * u[IX(i, j, k)] +
                v[IX(i, j, k)] * v[IX(i, j, k)] +
                w[IX(i, j, k)] * w[IX(i, j, k)]));
@@ -295,33 +312,33 @@ int write_vtk_data(PARA_DATA *para, REAL **var, char *name) {
   fprintf(datafile, "\n");
 
   // Next three lines: Write scalar U
-  fprintf(datafile, "SCALARS U float 1\n");
+  fprintf(datafile, "SCALARS U %s 1\n", vtk_type);
   fprintf(datafile, "LOOKUP_TABLE default\n");
   FOR_ALL_CELL
-  fprintf(datafile, "%f\t", u[IX(i, j, k)]);
+  fprintf(datafile, vtk_fmt, u[IX(i, j, k)]);
   END_FOR
   fprintf(datafile, "\n");
 
   // Next three lines: Write scalar V
-  fprintf(datafile, "SCALARS V float 1\n");
+  fprintf(datafile, "SCALARS V %s 1\n", vtk_type);
   fprintf(datafile, "LOOKUP_TABLE default\n");
   FOR_ALL_CELL
-  fprintf(datafile, "%f\t", v[IX(i, j, k)]);
+  fprintf(datafile, vtk_fmt, v[IX(i, j, k)]);
   END_FOR
   fprintf(datafile, "\n");
 
   // Next three lines: Write scalar W
-  fprintf(datafile, "SCALARS W float 1\n");
+  fprintf(datafile, "SCALARS W %s 1\n", vtk_type);
   fprintf(datafile, "LOOKUP_TABLE default\n");
   FOR_ALL_CELL
-  fprintf(datafile, "%f\t", w[IX(i, j, k)]);
+  fprintf(datafile, vtk_fmt, w[IX(i, j, k)]);
   END_FOR
   fprintf(datafile, "\n");
 
   // From lines: Write velocity vector
-  fprintf(datafile, "VECTORS velocity float\n");
+  fprintf(datafile, "VECTORS velocity %s\n", vtk_type);
   FOR_ALL_CELL
-  fprintf(datafile, "%f\t%f\t%f\n", u[IX(i, j, k)], v[IX(i, j, k)],
+  fprintf(datafile, vtk_fmt_vec, u[IX(i, j, k)], v[IX(i, j, k)],
           w[IX(i, j, k)]);
   END_FOR
 
@@ -334,7 +351,7 @@ int write_vtk_data(PARA_DATA *para, REAL **var, char *name) {
   // write to the stream
   // FIXME: need to talk to Mike about the coordinate
   FOR_ALL_CELL_IJK
-  fprintf(stdout, "%f\t%f\t%f\n", u[IX(i, j, k)], v[IX(i, j, k)],
+  fprintf(stdout, vtk_fmt_vec, u[IX(i, j, k)], v[IX(i, j, k)],
           w[IX(i, j, k)]);
   END_FOR
 
@@ -364,6 +381,19 @@ int write_vtk_fluid(PARA_DATA *para, REAL **var, char *name) {
   int CellNum = 0;
   char *filename;
   FILE *datafile;
+  const char *vtk_type;
+  const char *vtk_fmt;
+  const char *vtk_fmt_vec;
+
+  if (ifDouble == 1) {
+    vtk_type = "double";
+    vtk_fmt = "%.16g\t";
+    vtk_fmt_vec = "%.16g\t%.16g\t%.16g\n";
+  } else {
+    vtk_type = "float";
+    vtk_fmt = "%f\t";
+    vtk_fmt_vec = "%f\t%f\t%f\n";
+  }
 
   /****************************************************************************
   | Allocate memory for filename
@@ -403,29 +433,29 @@ int write_vtk_fluid(PARA_DATA *para, REAL **var, char *name) {
   fprintf(datafile, "DIMENSIONS\t%d\t%d\t%d\n", imax, jmax, kmax);
 
   // Next line: X direction coordinate number
-  fprintf(datafile, "X_COORDINATES %d float\n", imax);
+  fprintf(datafile, "X_COORDINATES %d %s\n", imax, vtk_type);
 
   // Next line: X direction coordinate
   for (i = 1; i <= imax; i++) {
-    fprintf(datafile, "%f\t", x[IX(i, jmax, kmax)]);
+    fprintf(datafile, vtk_fmt, x[IX(i, jmax, kmax)]);
   }
   fprintf(datafile, "\n");
 
   // Next line: Y direction coordinate number
-  fprintf(datafile, "Y_COORDINATES %d float\n", jmax);
+  fprintf(datafile, "Y_COORDINATES %d %s\n", jmax, vtk_type);
 
   // Next line: Y direction coordinate
   for (i = 1; i <= jmax; i++) {
-    fprintf(datafile, "%f\t", y[IX(imax, i, kmax)]);
+    fprintf(datafile, vtk_fmt, y[IX(imax, i, kmax)]);
   }
   fprintf(datafile, "\n");
 
   // Next line: Z direction coordinate number
-  fprintf(datafile, "Z_COORDINATES %d float\n", kmax);
+  fprintf(datafile, "Z_COORDINATES %d %s\n", kmax, vtk_type);
 
   // Next line: Z direction coordinate
   for (i = 1; i <= kmax; i++) {
-    fprintf(datafile, "%f\t", z[IX(imax, jmax, i)]);
+    fprintf(datafile, vtk_fmt, z[IX(imax, jmax, i)]);
   }
   fprintf(datafile, "\n");
 
@@ -446,26 +476,26 @@ int write_vtk_fluid(PARA_DATA *para, REAL **var, char *name) {
   fprintf(datafile, "POINT_DATA %d\n", CellNum);
 
   // Next three lines: Write scalar variable T
-  fprintf(datafile, "SCALARS T float 1\n");
+  fprintf(datafile, "SCALARS T %s 1\n", vtk_type);
   fprintf(datafile, "LOOKUP_TABLE default\n");
   FOR_EACH_CELL
-  fprintf(datafile, "%f\t", T[IX(i, j, k)]);
+  fprintf(datafile, vtk_fmt, T[IX(i, j, k)]);
   END_FOR
   fprintf(datafile, "\n");
 
   // Next three lines: Write scalar variable P
-  fprintf(datafile, "SCALARS P float 1\n");
+  fprintf(datafile, "SCALARS P %s 1\n", vtk_type);
   fprintf(datafile, "LOOKUP_TABLE default\n");
   FOR_EACH_CELL
-  fprintf(datafile, "%f\t", p[IX(i, j, k)]);
+  fprintf(datafile, vtk_fmt, p[IX(i, j, k)]);
   END_FOR
   fprintf(datafile, "\n");
 
   // Next three lines: Write scalar speed VEL
-  fprintf(datafile, "SCALARS VEL float 1\n");
+  fprintf(datafile, "SCALARS VEL %s 1\n", vtk_type);
   fprintf(datafile, "LOOKUP_TABLE default\n");
   FOR_EACH_CELL
-  fprintf(datafile, "%f\t",
+  fprintf(datafile, vtk_fmt,
           sqrt(u[IX(i, j, k)] * u[IX(i, j, k)] +
                v[IX(i, j, k)] * v[IX(i, j, k)] +
                w[IX(i, j, k)] * w[IX(i, j, k)]));
@@ -473,33 +503,33 @@ int write_vtk_fluid(PARA_DATA *para, REAL **var, char *name) {
   fprintf(datafile, "\n");
 
   // Next three lines: Write scalar U
-  fprintf(datafile, "SCALARS U float 1\n");
+  fprintf(datafile, "SCALARS U %s 1\n", vtk_type);
   fprintf(datafile, "LOOKUP_TABLE default\n");
   FOR_EACH_CELL
-  fprintf(datafile, "%f\t", u[IX(i, j, k)]);
+  fprintf(datafile, vtk_fmt, u[IX(i, j, k)]);
   END_FOR
   fprintf(datafile, "\n");
 
   // Next three lines: Write scalar V
-  fprintf(datafile, "SCALARS V float 1\n");
+  fprintf(datafile, "SCALARS V %s 1\n", vtk_type);
   fprintf(datafile, "LOOKUP_TABLE default\n");
   FOR_EACH_CELL
-  fprintf(datafile, "%f\t", v[IX(i, j, k)]);
+  fprintf(datafile, vtk_fmt, v[IX(i, j, k)]);
   END_FOR
   fprintf(datafile, "\n");
 
   // Next three lines: Write scalar W
-  fprintf(datafile, "SCALARS W float 1\n");
+  fprintf(datafile, "SCALARS W %s 1\n", vtk_type);
   fprintf(datafile, "LOOKUP_TABLE default\n");
   FOR_EACH_CELL
-  fprintf(datafile, "%f\t", w[IX(i, j, k)]);
+  fprintf(datafile, vtk_fmt, w[IX(i, j, k)]);
   END_FOR
   fprintf(datafile, "\n");
 
   // From lines: Write velocity vector
-  fprintf(datafile, "VECTORS velocity float\n");
+  fprintf(datafile, "VECTORS velocity %s\n", vtk_type);
   FOR_EACH_CELL
-  fprintf(datafile, "%f\t%f\t%f\n", u[IX(i, j, k)], v[IX(i, j, k)],
+  fprintf(datafile, vtk_fmt_vec, u[IX(i, j, k)], v[IX(i, j, k)],
           w[IX(i, j, k)]);
   END_FOR
 
@@ -1014,5 +1044,381 @@ int write_SCI(PARA_DATA *para, REAL **var, char *name) {
   ffd_log(msg, FFD_NORMAL);
   free(filename);
   return 0;
+}
 
-} // End of write_SCI()
+///////////////////////////////////////////////////////////////////////////////
+/// Write standard output data in a format for tecplot (unsteady results) -- KCNg 5 AUG 2025
+///
+///\param para Pointer to FFD parameters
+///\param var Pointer to FFD simulation variables
+///\param name Pointer to file name
+///
+///\return 0 if no error occurred
+///////////////////////////////////////////////////////////////////////////////
+int write_tecplot_data_unsteady(PARA_DATA * para, REAL **var, char* name) {
+    int i, j, k;
+    int imax = para->geom->imax, jmax = para->geom->jmax;
+    int kmax = para->geom->kmax;
+    int IMAX = imax + 2, IJMAX = (imax + 2) * (jmax + 2);
+    REAL* x = var[X], * y = var[Y], * z = var[Z];
+    REAL* u = var[VX], * v = var[VY], * w = var[VZ], * p = var[IP];
+    REAL* T = var[TEMP], * Xi = var[Xi1];
+    REAL* flagp = var[FLAGP];
+    char* filename;
+    char timestepcounter[16];
+    FILE* datafile;
+    const char *vtk_type;
+    const char *vtk_fmt;
+    const char *vtk_fmt_vec;
+
+    if (ifDouble == 1) {
+        vtk_type = "double";
+        vtk_fmt = "%.16g\t";
+        vtk_fmt_vec = "%.16g\t%.16g\t%.16g\n";
+    } else {
+        vtk_type = "float";
+        vtk_fmt = "%f\t";
+        vtk_fmt_vec = "%f\t%f\t%f\n";
+    }
+
+    snprintf(timestepcounter, sizeof(timestepcounter), "%010d", para->mytime->step_current); // convert time step counter to string
+
+    /****************************************************************************
+    | Allocate memory for filename
+    | Length of filename should be sizeof(ActualName) + 1
+    | Using sizeof(ActualName) will cause memory fault in free(filename)
+    ****************************************************************************/
+    filename = (char*)malloc((strlen(name) + strlen(timestepcounter) + 5) * sizeof(char));
+    if (filename == NULL) {
+        ffd_log("write_tecplot_data(): Failed to allocate memory for file name",
+            FFD_ERROR);
+        return 1;
+    }
+
+    strcpy(filename, name);
+    strcat(filename, timestepcounter);
+    strcat(filename, ".plt");
+
+    // Open output file
+    if ((datafile = fopen(filename, "w+")) == NULL) {
+        ffd_log("write_tecplot_data(): Failed to open output file!\n", FFD_ERROR);
+        return 1;
+    }
+
+    convert_to_tecplot(para, var);
+
+    fprintf(datafile, "TITLE = ");
+    fprintf(datafile, "\"dt=%fs, t=%fs, nu=%f, Lx=%f, Ly=%f, Lz=%f, ", para->mytime->dt, para->mytime->t, para->prob->nu, para->geom->Lx, para->geom->Ly, para->geom->Lz);
+    fprintf(datafile, "Nx=%d, Ny=%d, Nz=%d \"\n", imax + 2, jmax + 2, kmax + 2);
+
+    fprintf(datafile, "VARIABLES =X, Y, Z, I, J, K, U, V, W, T, Xi, FlagP, P, Vel \n");
+    fprintf(datafile, "ZONE F=POINT, SOLUTIONTIME=%.6f, I=%d, J=%d, K=%d\n", para->mytime->t, imax + 2, jmax + 2, kmax + 2);
+
+    FOR_ALL_CELL
+        // ommit the internal block for better visualization
+        // tianwei
+        // 3/11/2015
+        // if (var[FLAGP][IX(i,j,k)] == SOLID) {
+        //  // X
+        //  if (i == 0) {
+        //    if (var[FLAGP][IX(i+1,j,k)] == SOLID) continue;
+        //  }
+        //  else if (i == imax+1) {
+        //    if (var[FLAGP][IX(i-1,j,k)] == SOLID) continue;
+        //  }
+        //  else
+        //    continue;
+        //
+        //  // Y
+        //  if (j == 0) {
+        //    if (var[FLAGP][IX(i,j+1,k)] == SOLID) continue;
+        //  }
+        //  else if (j == jmax+1) {
+        //    if (var[FLAGP][IX(i,j-1,k)] == SOLID) continue;
+        //  }
+        //  else
+        //    continue;
+
+        //  //Z
+        //  if (k == 0) {
+        //    if (var[FLAGP][IX(i,j,k+1)] == SOLID) continue;
+        //  }
+        //  else if (k == kmax+1) {
+        //    if (var[FLAGP][IX(i,j,k-1)] == SOLID) continue;
+        //  }
+        //  else
+        //    continue;
+        //
+        //}// end of if for finding internal blocks
+
+        fprintf(datafile, "%f\t%f\t%f\t%d\t%d\t%d\t", x[IX(i, j, k)], y[IX(i, j, k)],
+            z[IX(i, j, k)], i, j, k);
+    fprintf(datafile, "%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n", u[IX(i, j, k)],
+        v[IX(i, j, k)], w[IX(i, j, k)], T[IX(i, j, k)], Xi[IX(i, j, k)],
+        flagp[IX(i, j, k)], p[IX(i, j, k)],
+        sqrt(u[IX(i, j, k)] * u[IX(i, j, k)] +
+            v[IX(i, j, k)] * v[IX(i, j, k)] +
+            w[IX(i, j, k)] * w[IX(i, j, k)]));
+    END_FOR
+
+    sprintf(msg, "write_tecplot_data(): Wrote file %s.", filename);
+    ffd_log(msg, FFD_NORMAL);
+
+    free(filename);
+    fclose(datafile);
+    return 0;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+/// Write standard output data in a format for paraview in VTK (Visualization
+/// Toolkit) http://www.vtk.org/wp-content/uploads/2015/04/file-formats.pdf
+///\ KCNg
+///\ 14/8/2025
+///\param para Pointer to FFD parameters
+///\param var Pointer to FFD simulation variables
+///\param name Pointer to file name
+///
+///\return 0 if no error occurred
+///////////////////////////////////////////////////////////////////////////////
+int write_vtk_data_unsteady(PARA_DATA * para, REAL * *var, char* name) {
+    int i, j, k;
+    int imax = para->geom->imax, jmax = para->geom->jmax;
+    int kmax = para->geom->kmax;
+    int IMAX = imax + 2, IJMAX = (imax + 2) * (jmax + 2);
+    REAL* x = var[X], * y = var[Y], * z = var[Z];
+    //REAL *u = var[VXM], *v = var[VYM], *w = var[VZM], *p = var[IP];
+    //REAL *T = var[TEMPM], *Xi = var[Xi1];
+    REAL* u = var[VX], * v = var[VY], * w = var[VZ], * p = var[IP];
+    REAL* T = var[TEMP], * Xi = var[Xi1];
+    REAL* flagp = var[FLAGP];
+    char* filename;
+    char timestepcounter[16];
+    FILE* datafile;
+
+    const char *vtk_type;
+    const char *vtk_fmt;
+    const char *vtk_fmt_vec;
+
+    if (ifDouble == 1) {
+      vtk_type = "double";
+      vtk_fmt = "%.16g\t";
+      vtk_fmt_vec = "%.16g\t%.16g\t%.16g\n";
+    } else {
+      vtk_type = "float";
+      vtk_fmt = "%f\t";
+      vtk_fmt_vec = "%f\t%f\t%f\n";
+    }
+
+    snprintf(timestepcounter, sizeof(timestepcounter), "%010d", para->mytime->step_current); // convert time step counter to string
+
+    /****************************************************************************
+    | Allocate memory for filename
+    | Length of filename should be sizeof(ActualName) + 1
+    | Using sizeof(ActualName) will cause memory fault in free(filename)
+    ****************************************************************************/
+    filename = (char*)malloc((strlen(name) + strlen(timestepcounter) + 5) * sizeof(char));
+    if (filename == NULL) {
+        ffd_log("write_tecplot_data(): Failed to allocate memory for file name",
+            FFD_ERROR);
+        return 1;
+    }
+
+    strcpy(filename, name);
+    strcat(filename, timestepcounter);
+    strcat(filename, ".vtk");
+
+    // Open output file
+    if ((datafile = fopen(filename, "w+")) == NULL) {
+        ffd_log("write_vtk_data(): Failed to open output file!\n", FFD_ERROR);
+        return 1;
+    }
+
+    convert_to_tecplot(para, var);
+    // See file of the attached link for detail
+    // first line: the version of the VTK format
+    fprintf(datafile, "# vtk DataFile Version 2.0\n");
+    // Next line: title
+    fprintf(datafile, "FFDResults\n");
+
+    // Next line: data type
+    fprintf(datafile, "ASCII\n");
+
+    // Next line: geometry type
+    fprintf(datafile, "DATASET RECTILINEAR_GRID\n");
+
+    // Next line: dimensions
+    fprintf(datafile, "DIMENSIONS\t%d\t%d\t%d\n", imax + 2, jmax + 2, kmax + 2);
+
+    // Next line: X direction coordinate number
+    fprintf(datafile, "X_COORDINATES %d %s\n", imax + 2, vtk_type);
+
+    // Next line: X direction coordinate
+    for (i = 0; i <= imax + 1; i++) {
+        fprintf(datafile, vtk_fmt, x[IX(i, jmax, kmax)]);
+    }
+    fprintf(datafile, "\n");
+
+    // Next line: Y direction coordinate number
+    fprintf(datafile, "Y_COORDINATES %d %s\n", jmax + 2, vtk_type);
+
+    // Next line: Y direction coordinate
+    for (i = 0; i <= jmax + 1; i++) {
+        fprintf(datafile, vtk_fmt, y[IX(imax, i, kmax)]);
+    }
+    fprintf(datafile, "\n");
+
+    // Next line: Z direction coordinate number
+    fprintf(datafile, "Z_COORDINATES %d %s\n", kmax + 2, vtk_type);
+
+    // Next line: Z direction coordinate
+    for (i = 0; i <= kmax + 1; i++) {
+        fprintf(datafile, vtk_fmt, z[IX(imax, jmax, i)]);
+    }
+    fprintf(datafile, "\n");
+
+    /////////////////////////////////////////////////
+    // Add writing time
+    fprintf(datafile, "\n");
+    fprintf(datafile, "FIELD FieldData 1\n");
+    fprintf(datafile, "TIME 1 1 %s\n", vtk_type);
+    if (ifDouble == 1) {
+        fprintf(datafile, "%.16g\n", para->mytime->t);
+    } else {
+        fprintf(datafile, "%f\n", para->mytime->t);
+    }
+    fprintf(datafile, "\n");
+    /////////////////////////////////////////////////
+
+    // Next line: Number of data point
+    fprintf(datafile, "POINT_DATA %d\n", (imax + 2) * (jmax + 2) * (kmax + 2));
+
+    // Next three lines: Write scalar variable T
+    fprintf(datafile, "SCALARS T %s 1\n", vtk_type);
+    fprintf(datafile, "LOOKUP_TABLE default\n");
+    FOR_ALL_CELL
+        fprintf(datafile, vtk_fmt, T[IX(i, j, k)]);
+    END_FOR
+        fprintf(datafile, "\n");
+
+    // Next three lines: Write scalar variable P
+    fprintf(datafile, "SCALARS P %s 1\n", vtk_type);
+    fprintf(datafile, "LOOKUP_TABLE default\n");
+    FOR_ALL_CELL
+        fprintf(datafile, vtk_fmt, p[IX(i, j, k)]);
+    END_FOR
+        fprintf(datafile, "\n");
+
+    // Next three lines: Write scalar speed VEL
+    fprintf(datafile, "SCALARS VEL %s 1\n", vtk_type);
+    fprintf(datafile, "LOOKUP_TABLE default\n");
+    FOR_ALL_CELL
+        fprintf(datafile, vtk_fmt,
+            sqrt(u[IX(i, j, k)] * u[IX(i, j, k)] +
+                v[IX(i, j, k)] * v[IX(i, j, k)] +
+                w[IX(i, j, k)] * w[IX(i, j, k)]));
+    END_FOR
+        fprintf(datafile, "\n");
+
+    // Next three lines: Write scalar U
+    fprintf(datafile, "SCALARS U %s 1\n", vtk_type);
+    fprintf(datafile, "LOOKUP_TABLE default\n");
+    FOR_ALL_CELL
+        fprintf(datafile, vtk_fmt, u[IX(i, j, k)]);
+    END_FOR
+        fprintf(datafile, "\n");
+
+    // Next three lines: Write scalar V
+    fprintf(datafile, "SCALARS V %s 1\n", vtk_type);
+    fprintf(datafile, "LOOKUP_TABLE default\n");
+    FOR_ALL_CELL
+        fprintf(datafile, vtk_fmt, v[IX(i, j, k)]);
+    END_FOR
+        fprintf(datafile, "\n");
+
+    // Next three lines: Write scalar W
+    fprintf(datafile, "SCALARS W %s 1\n", vtk_type);
+    fprintf(datafile, "LOOKUP_TABLE default\n");
+    FOR_ALL_CELL
+        fprintf(datafile, vtk_fmt, w[IX(i, j, k)]);
+    END_FOR
+        fprintf(datafile, "\n");
+
+    // From lines: Write velocity vector
+    fprintf(datafile, "VECTORS velocity %s\n", vtk_type);
+    FOR_ALL_CELL
+        fprintf(datafile, vtk_fmt_vec, u[IX(i, j, k)], v[IX(i, j, k)],
+            w[IX(i, j, k)]);
+    END_FOR
+
+        sprintf(msg, "write_vtk_data(): Wrote file %s.", filename);
+    ffd_log(msg, FFD_NORMAL);
+
+    free(filename);
+    fclose(datafile);
+
+    //// write to the stream
+    //// FIXME: need to talk to Mike about the coordinate
+    //FOR_ALL_CELL_IJK
+    //	fprintf(stdout, "%f\t%f\t%f\n", u[IX(i, j, k)], v[IX(i, j, k)],
+    //		w[IX(i, j, k)]);
+    //END_FOR
+
+    return 0;
+}
+
+int write_oldffd_data(PARA_DATA* para, REAL** var, char* name) {
+
+    int i, j, k;
+    int imax = para->geom->imax, jmax = para->geom->jmax;
+    int kmax = para->geom->kmax;
+    int IMAX = imax + 2, IJMAX = (imax + 2) * (jmax + 2);
+    REAL* u = var[VX], *v = var[VY], *w = var[VZ], *p = var[IP];
+    REAL* T = var[TEMP], *Xi = var[Xi1];
+    FILE* datafile;
+    char filename[256];   // fixed buffer, plenty of space
+
+
+    // Build filename safely
+    snprintf(filename, sizeof(filename), "%s.ekl", name);
+    /****************************************************************************
+    | Allocate memory for filename
+    | Length of filename should be sizeof(ActualName) + 1
+    | Using sizeof(ActualName) will cause memory fault in free(filename)
+    ****************************************************************************/
+
+    // Open output file
+    if ((datafile = fopen(filename, "w+")) == NULL) {
+        ffd_log("write_oldffd_data(): Failed to open output file!\n", FFD_ERROR);
+        return 1;
+    }
+
+    fprintf(datafile, "%f\t%d\n",
+        para->mytime->t,
+        para->mytime->step_current);
+    
+    FOR_ALL_CELL
+    if (ifDouble == 1) {
+        fprintf(datafile, "%.16g\t%.16g\t%.16g\t%.16g\t%.16g\t%.16g\n",
+            u[IX(i, j, k)],   // velocity X
+            v[IX(i, j, k)],   // velocity Y
+            w[IX(i, j, k)],   // velocity Z
+            T[IX(i, j, k)],   // temperature
+            Xi[IX(i, j, k)],  // species fraction
+            p[IX(i, j, k)]);  // pressure
+    } else {
+        fprintf(datafile, "%f\t%f\t%f\t%f\t%f\t%f\n",
+            u[IX(i, j, k)],   // velocity X
+            v[IX(i, j, k)],   // velocity Y
+            w[IX(i, j, k)],   // velocity Z
+            T[IX(i, j, k)],   // temperature
+            Xi[IX(i, j, k)],  // species fraction
+            p[IX(i, j, k)]);  // pressure
+    }
+    END_FOR
+
+    sprintf(msg, "write_oldffd_data(): Wrote file %s.", filename);
+    ffd_log(msg, FFD_NORMAL);
+
+    fclose(datafile);
+    return 0;
+}

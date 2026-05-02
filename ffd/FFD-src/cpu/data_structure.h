@@ -44,8 +44,8 @@
 #include <stdlib.h>
 
 #ifndef REAL
-#define REAL float
-#define ifDouble 0/*index to show it is double*/
+#define REAL double
+#define ifDouble 1/*index to show it is double*/
 #endif
 
 #define IX(i,j,k) ((i)+(IMAX)*(j)+(IJMAX)*(k))
@@ -156,6 +156,8 @@ typedef enum{NOSLIP, SLIP, INFLOW, OUTFLOW, PERIODIC, SYMMETRY} BCTYPE;
 #define TILE 3
 #define RACK_INLET 4
 #define RACK_OUTLET 5
+#define TILE_INLET 6
+#define TILE_OUTLET 7
 #define FLUID -1
 
 #define RACK 100
@@ -295,7 +297,8 @@ typedef struct {
   char **portName; // *portName[nb_port]: Name of ports
   char **blockName; // *blockName[nb_block]: Name of internal block
   char **sourceName; // *sourceName[nb_source]: Name of the source
-  char **rackName; // *rackNmae[nb_rack]: name of rack
+  char **rackName; // *rackName[nb_rack]: name of rack
+  char** tileName; // *tileName[nb_tile]: name of tile
   int *wallId; // wallId[nb_wall]: Modelica wall boundary ID
   //int *inletId; // Modelica inlet boundary ID
   int *portId; // portId[nb_port]: Modelica outlet boundary ID
@@ -319,9 +322,13 @@ typedef struct {
   REAL **CPortAve; // CPortAve[nb_port][nb_C]: Surface averaged value of CPort
   REAL **CPortMean; // CPortMean[nb_port][nb_C]: Time averaged value of CPort
   int nb_rack; // number of rack in the data center room
+  int nb_tiles; // number of tiles in the data center room
   int **RackMap; // Map the inlet and outlet cell of rack, a N by 3 array, where N is number of racks
   REAL *RackFlowRate; // The volumetric flow rate for each rack in M3/s, a vector of N elements
+  int *RackCurtain; // The stanchion model for rack, 1: with stanchion; 0: without stanchion
+  REAL* RackCurtainOpening; // The opening ratio of the stanchion for rack
   int *RackDir; // The cooling air flow direction of the rack, +1: X, -1: Y, +2: Y, -2: -Y, +3: Z, -3: -Z
+  int* TileDir; // The cooling air flow direction of the tile, +1: X, -1: Y, +2: Y, -2: -Y, +3: Z, -3: -Z
   REAL *HeatDiss; // Heat dissipation of rack in W, a vector of N element
   REAL *RackArea; // Inlet or outlet area of rack, a vector of N element
   BC_TYPE outlet_bc; // type of outlet bc
@@ -369,7 +376,9 @@ typedef struct {
   REAL t_steady; // Necessary time for reaching the steady state from initial condition
   int step_total; // The interval of iteration step to output data
   int step_current; // Internal: current iteration step
+  int restart_total_steps; // Internal: Total steps for restart
   int step_mean; // Internal: steps for time average
+  int num_resultfile; // Number of result files to be saved within step_total
   REAL t_start; // Internal: clock time when simulation starts
   REAL t_end; // Internal: clock time when simulation ends
 }TIME_DATA;
@@ -381,6 +390,7 @@ typedef struct {
   int step_total; // The interval of iteration step to output data
   int step_current; // Internal: current iteration step
   int step_mean; // Internal: steps for time average
+  int num_resultfile; // Number of result files to be saved within step_total
   REAL t_start; // Internal: clock time when simulation starts
   REAL t_end; // Internal: clock time when simulation ends
 }GPU_TIME_DATA;
@@ -393,11 +403,14 @@ typedef struct {
   INTERPOLATION interpolation; // Interpolation in semi-Lagrangian method: BILINEAR, FSJ, HYBRID
   int cosimulation;  // 0: single; 1: coupled simulation
   int nextstep; // Internal: 1: yes; 0: no, wait
-  int swipe_adv; // swipe numbers in GS for advection, if using implicit scheme
-  int swipe_dif; // swipe numbers in GS for diffusion
-  int swipe_pro; // swipe numbers in GS for projection
+  //int swipe_adv; // swipe numbers in GS for advection, if using implicit scheme
+  //int swipe_dif; // swipe numbers in GS for diffusion
+  //int swipe_pro; // swipe numbers in GS for projection
+  REAL res_adv; // minimum residuals in GS for advection, if using implicit scheme
+  REAL res_dif; // minimum residuals in GS for diffusion
+  REAL res_pro; // minimum residuals in GS for projection
 	TILE_FLOW_CORRECTION tile_flow_correct; // how to correct the flow rates at tiles
-  int mass_conservation_on; // apply forced mass conservation or not
+  int mass_conservation_on; // apply forced mass conservation or not 
 }SOLV_DATA;
 
 typedef struct {

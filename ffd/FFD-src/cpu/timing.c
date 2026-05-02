@@ -45,5 +45,6 @@ void timing(PARA_DATA *para) {
   sprintf(msg, "Physical time=%.4f s, CPU time=%.4f s, Time Ratio=%.4f",
          para->mytime->t, cputime, para->mytime->t/cputime);
   ffd_log(msg, FFD_NORMAL);
+  printf("Physical time=%.4f s, CPU time=%.4f s, Time Ratio=%.4f", para->mytime->t, cputime, para->mytime->t / cputime); // print timing on screen
 
 } // End of timing( )

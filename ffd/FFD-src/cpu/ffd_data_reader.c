@@ -43,11 +43,51 @@ int read_ffd_data(PARA_DATA *para, REAL **var) {
     return 1;
   }
 
+  fgets(string, 400, file_old_ffd);
+  sscanf(string, "%lf%d", &para->mytime->t, &para->mytime->step_current);
+  para->mytime->t_start = para->mytime->t;
+  para->mytime->restart_total_steps = para->mytime->step_current;
+
+  sprintf(msg, "QFLUXFLUX4: %d%d", para->mytime->step_total, para->mytime->restart_total_steps);
+  ffd_log(msg, FFD_NORMAL);
+
+  // Adjustments for restarts
+  para->mytime->step_total += para->mytime->restart_total_steps;
+
+  sprintf(msg, "QFLUXFLUX3: %lf %d %d", para->mytime->t, para->mytime->step_current, para->mytime->restart_total_steps);
+  ffd_log(msg, FFD_NORMAL);
+
   FOR_ALL_CELL
    fgets(string, 400, file_old_ffd);
-   sscanf(string,"%lf%lf%lf%lf%lf%lf", &var[VX][IX(i,j,k)], &var[VY][IX(i,j,k)],
-          &var[VZ][IX(i,j,k)], &var[TEMP][IX(i,j,k)],
-          &var[Xi1][IX(i,j,k)], &var[IP][IX(i,j,k)]);
+
+  int read_count;
+  if (ifDouble == 1) {
+      read_count = sscanf(string, "%lf%lf%lf%lf%lf%lf", &var[VX][IX(i, j, k)], &var[VY][IX(i, j, k)],
+          &var[VZ][IX(i, j, k)], &var[TEMP][IX(i, j, k)],
+          &var[Xi1][IX(i, j, k)], &var[IP][IX(i, j, k)]);
+  } else {
+      read_count = sscanf(string, "%f%f%f%f%f%f", &var[VX][IX(i, j, k)], &var[VY][IX(i, j, k)],
+          &var[VZ][IX(i, j, k)], &var[TEMP][IX(i, j, k)],
+          &var[Xi1][IX(i, j, k)], &var[IP][IX(i, j, k)]);
+  }
+
+  if (read_count == 6) {
+      /*
+	  // For debugging purpose only
+
+      sprintf(msg, "QFLUXFLUX2: %f%f%f%f%f%f", var[VX][IX(i, j, k)], var[VY][IX(i, j, k)],
+          var[VZ][IX(i, j, k)], var[TEMP][IX(i, j, k)],
+          var[Xi1][IX(i, j, k)], var[IP][IX(i, j, k)]);
+      ffd_log(msg, FFD_NORMAL);
+      */
+  }
+   else {
+       // handle error: parsing failed
+       sprintf(msg, "read_ffd_data(): Read previous ffd simulation data file failed");
+       ffd_log(msg, FFD_NORMAL);
+   }
+   
+
   END_FOR
 
   fclose(file_old_ffd);
@@ -56,4 +96,3 @@ int read_ffd_data(PARA_DATA *para, REAL **var) {
   ffd_log(msg, FFD_NORMAL);
   return 0;
 } // End of read_ffd_data()
-

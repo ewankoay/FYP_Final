@@ -84,10 +84,17 @@ REAL nu_t_chen_zero_equ(PARA_DATA *para, REAL **var, int i, int j, int k) {
                 coeff = para->prob->chen_a;
         }
 
-        nu_t = coeff * l
+        // OLD IMPLEMENTATION
+        /*nu_t = coeff * l
                 * (REAL)sqrt(u[IX(i,j,k)]*u[IX(i,j,k)]
                                         +v[IX(i,j,k)]*v[IX(i,j,k)]
-                                        +w[IX(i,j,k)]*w[IX(i,j,k)] );
+                                        +w[IX(i,j,k)]*w[IX(i,j,k)] );*/
+        // NEW IMPLEMENTATION
+        REAL u_c = 0.5 * (u[IX(i,j,k)] + u[IX(i-1,j,k)]);
+        REAL v_c = 0.5 * (v[IX(i,j,k)] + v[IX(i,j-1,k)]);
+        REAL w_c = 0.5 * (w[IX(i,j,k)] + w[IX(i,j,k-1)]);
+
+        nu_t = coeff * l * (REAL)sqrt(u_c*u_c + v_c*v_c + w_c*w_c);
 
   return nu_t;
 } // End of nu_t_chen_zero_equ()
@@ -137,5 +144,3 @@ REAL alpha_t_chen_zero_equ(PARA_DATA *para, REAL **var) {
 
         return sum_tur_alpha / count; // turbulent alpha for each cell
 } // end of alpha_t
-
-

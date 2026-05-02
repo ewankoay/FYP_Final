@@ -42,11 +42,12 @@ int project(PARA_DATA *para, REAL **var, int **BINDEX) {
   REAL *ae = var[AE], *aw =var[AW], *an = var[AN], *as = var[AS];
   REAL dxe,dxw, dyn,dys,dzf,dzb,Dx,Dy,Dz;
   REAL *flagu = var[FLAGU],*flagv = var[FLAGV],*flagw = var[FLAGW];
-  int num_swipe = para->solv->swipe_pro;
+  REAL residual_min = para->solv->res_pro; // target residual for projection step. Change from num_swipe to residual
   REAL *flagp = var[FLAGP];
   REAL residual = 0.0;
   REAL rho = para->prob->rho;
   REAL cell_vol = 0.0;
+
 
   /****************************************************************************
   | Calculate all coefficients
@@ -85,16 +86,16 @@ int project(PARA_DATA *para, REAL **var, int **BINDEX) {
   
   // solve equations
   if (para->solv->solver == GS) {
-    Gauss_Seidel(para, var, p, flagp, num_swipe);
+	Gauss_Seidel(para, var, p, flagp, residual_min); // change from num_swipe to residual
     }
   else {
-    Jacobi(para, var, p, flagp, num_swipe);
+	Jacobi(para, var, p, flagp, residual_min); // change from num_swipe to residual
   }
 
   // check residual after iterative solver
   if (para->solv->check_residual == 1) {
       residual = check_residual(para, var, p, var[FLAGP]);
-      sprintf(msg, "Residual in projection: %f", residual);
+      sprintf(msg, "Residual in projection: %e", residual);
       ffd_log(msg, FFD_NORMAL);
   }
 
@@ -108,18 +109,30 @@ int project(PARA_DATA *para, REAL **var, int **BINDEX) {
     if (flagu[IX(i,j,k)]>=0) continue;
     //u[IX(i,j,k)] -= dt/rho*(p[IX(i+1,j,k)]-p[IX(i,j,k)]) / (x[IX(i+1,j,k)]-x[IX(i,j,k)]);
 	u[IX(i, j, k)] -= dt * (p[IX(i + 1, j, k)] - p[IX(i, j, k)]) / (x[IX(i + 1, j, k)] - x[IX(i, j, k)]);
+    /*if isnan(w[IX(i, j, k)]) {
+        sprintf(msg, "EWANTEST NaN detected: %d %d %d %f", i, j, k, p[IX(i, j, k)]);
+        ffd_log(msg, FFD_ERROR);
+    }*/
   END_FOR
 
   FOR_V_CELL
     if (flagv[IX(i,j,k)]>=0) continue;
     //v[IX(i,j,k)] -= dt/rho*(p[IX(i,j+1,k)]-p[IX(i,j,k)]) / (y[IX(i,j+1,k)]-y[IX(i,j,k)]);
 	v[IX(i, j, k)] -= dt * (p[IX(i, j + 1, k)] - p[IX(i, j, k)]) / (y[IX(i, j + 1, k)] - y[IX(i, j, k)]);
+    /*if isnan(w[IX(i, j, k)]) {
+        sprintf(msg, "EWANTEST NaN detected: %d %d %d %f", i, j, k, p[IX(i, j, k)]);
+        ffd_log(msg, FFD_ERROR);
+    }*/
   END_FOR
 
   FOR_W_CELL
     if (flagw[IX(i,j,k)]>=0) continue;
     //w[IX(i,j,k)] -= dt/rho*(p[IX(i,j,k+1)]-p[IX(i,j,k)]) / (z[IX(i,j,k+1)]-z[IX(i,j,k)]);
 	w[IX(i, j, k)] -= dt  * (p[IX(i, j, k + 1)] - p[IX(i, j, k)]) / (z[IX(i, j, k + 1)] - z[IX(i, j, k)]);
+    /*if isnan(w[IX(i, j, k)]) {
+        sprintf(msg, "EWANTEST NaN detected: %d %d %d %f", i, j, k, p[IX(i, j, k)]);
+        ffd_log(msg, FFD_ERROR);
+    }*/
   END_FOR
 
   /****************************************************************************
@@ -127,7 +140,7 @@ int project(PARA_DATA *para, REAL **var, int **BINDEX) {
   ****************************************************************************/
   if (para->solv->check_residual == 1) {
       residual = check_mass_imbalance(para, var);
-      sprintf(msg, "mass imbalance after projection: %f", residual);
+      sprintf(msg, "mass imbalance after projection: %e", residual);
       ffd_log(msg, FFD_NORMAL);
   }
 
@@ -144,7 +157,7 @@ int project(PARA_DATA *para, REAL **var, int **BINDEX) {
 ///
 ///\return 0 if no error occurred
 ///////////////////////////////////////////////////////////////////////////////
-int check_mass_imbalance(PARA_DATA *para, REAL **var) {
+REAL check_mass_imbalance(PARA_DATA *para, REAL **var) {
     int i, j, k;
     int imax = para->geom->imax, jmax = para->geom->jmax;
     int kmax = para->geom->kmax;
@@ -162,7 +175,12 @@ int check_mass_imbalance(PARA_DATA *para, REAL **var) {
                     (w[IX(i, j, k)] - w[IX(i, j, k - 1)]) / (gz[IX(i, j, k)] - gz[IX(i, j, k - 1)]);
         tmp += imbalance*imbalance;
         count += 1;
+        /*if isnan(imbalance) {
+            sprintf(msg, "EWANTEST NaN detected in mass imbalance: %d %d %d %f %f %f %f %f %f", i, j, k, u[IX(i, j, k)], v[IX(i, j, k)], w[IX(i, j, k)], gx[IX(i, j, k)], gy[IX(i, j, k)], gz[IX(i, j, k)]);
+            ffd_log(msg, FFD_ERROR);
+        }*/
     END_FOR
-    return sqrt(tmp/count);
+    sprintf(msg, "Precise mass imbalance after projection: %e", sqrt(tmp / count));
+    ffd_log(msg, FFD_NORMAL);
+    return sqrt(tmp / count);
 }
-

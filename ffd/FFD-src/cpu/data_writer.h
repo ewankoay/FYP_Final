@@ -104,5 +104,6 @@ int write_SCI(PARA_DATA *para, REAL **var, char *name);
 
 int write_vtk_data(PARA_DATA *para, REAL **var, char *name);
 int write_vtk_fluid(PARA_DATA *para, REAL **var, char *name);
-
+int write_tecplot_data_unsteady();
+int write_vtk_data_unsteady();
 #endif
